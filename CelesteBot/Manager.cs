@@ -3,6 +3,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 using Monocle;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,10 +13,33 @@ namespace CelesteBot
 {
     public class Manager
     {
+        private static Vector2 FontScale = new Vector2(0.4f, 0.4f);
+        private static Vector2 textPos = new Vector2(20f, 30f);
         private static KeyboardState kbState;
+        public static String activeText = "Vision:\n"; // overriden by INTEROP
+
+        // NEAT PARAMS:
+        // For Genome:
+        public static float RE_RANDOMIZE_WEIGHT_CHANCE = 0.1f;
+        public static float WEIGHT_MUTATION_CHANCE = 0.7f;
+        public static float ADD_CONNECTION_CHANCE = 0.1f;
+        public static float ADD_NODE_CHANCE = 0.01f;
+        // For Population:
+        public static int EXTINCTION_SAVE_TOP = 5; // The number of Species to save when a mass extinction occurs
+
+
+
+
         private static bool IsKeyDown(Keys key)
         {
             return kbState.IsKeyDown(key);
+        }
+        private static MTexture GetTile(Vector2 tile)
+        {
+            Level celesteLevel = Celeste.Celeste.Scene as Level;
+            SolidTiles tiles = celesteLevel.SolidTiles;
+            MTexture[,] tileArray = tiles.Tiles.Tiles.ToArray();
+            return tileArray[(int)tile.X, (int)tile.Y];
         }
         public static Vector2 GetXYCenterFromTile(Vector2 tPos)
         {
@@ -45,10 +69,30 @@ namespace CelesteBot
             int width = 8, height = 8;
             return new Vector2((int)((realPos.X - offsetX) / width), (int)((realPos.Y - offsetY) / height));
         }
-        public static Vector2 GetTileUnderPlayer()
+        public static Entity GetEntityFromXYCenter(Vector2 realPos)
+        {
+            //System.Collections.Generic.List<Entity> entities = Celeste.Celeste.Scene.Tracker.GetEntities<Entity>();
+            EntityList entities = Celeste.Celeste.Scene.Entities;/*Tracker.GetEntities<Entity>();*/
+            for (int i = 0; i < entities.Count; i++)
+            {
+                if (entities[i].Collidable && entities[i].CollidePoint(realPos) && entities[i].Tag != 16) // 16=Tag of player
+                {
+                    // Collided with the point and is collidable
+                    return entities[i];
+                }
+            }
+            return null;
+        }
+        public static Vector2 GetPlayerPos()
         {
             Player player = Celeste.Celeste.Scene.Tracker.GetEntity<Player>();
-            Vector2 playerPos = player.Position; // This is the bottom center
+            if (player != null)
+            return player.Position; // This is the bottom center
+            return new Vector2(0,0);
+        }
+        public static Vector2 GetTileUnderPlayer()
+        {
+            Vector2 playerPos = GetPlayerPos();
             playerPos = new Vector2(playerPos.X, playerPos.Y + 4);
 
             return GetTilePosFromXYCenter(playerPos); // This is to account for offset
@@ -56,6 +100,7 @@ namespace CelesteBot
         public static Vector2 GetTileInFrontOfPlayer()
         {
             Player player = Celeste.Celeste.Scene.Tracker.GetEntity<Player>();
+            if (player == null) return new Vector2(0, 0);
             Vector2 playerPos = player.Position; // This is the bottom center
 
             if (player.Facing > 0)
@@ -78,11 +123,25 @@ namespace CelesteBot
             MTexture[,] tileArray = tiles.Tiles.Tiles.ToArray();
             return tileArray[(int)tile.X, (int)tile.Y] != null;
         }
+        public static bool IsWall(Vector2 tile)
+        {
+            Level celesteLevel = Celeste.Celeste.Scene as Level;
+            SolidTiles tiles = celesteLevel.SolidTiles;
+            MTexture[,] tileArray = tiles.Tiles.Tiles.ToArray();
+            if (tileArray[(int)tile.X, (int)tile.Y] != null)
+            {
+                if (!tileArray[(int)tile.X, (int)tile.Y].ToString().Equals("tilesets/scenery"))
+                {
+                    return true; // It isn't part of the scenery, so it must be something that i can hit
+                }
+            }
+            return false; // it either is blank or is part of the scenery
+        }
         public static void PutEntitiesToFile()
         {
             Level celesteLevel = Celeste.Celeste.Scene as Level;
             SolidTiles tiles = celesteLevel.SolidTiles;
-
+            
             string readableTextures = "Center of all tiles (?): " + tiles.Center + "\n";
             try
             {
@@ -117,13 +176,8 @@ namespace CelesteBot
                 
             }
             */
-            string text = tiles.Tiles.ToString() + "\n";
-            text += tiles.Tiles.Tiles.GetSegment(1, 1).ToString() + "\n";
-            text += tiles.Tiles.Tiles.ToArray().ToString() + "\n";
+            
             MTexture[,] tileArray = tiles.Tiles.Tiles.ToArray();
-            System.Collections.IEnumerator enummer2 = tiles.Tiles.Tiles.ToArray().GetEnumerator();
-            enummer2.Reset();
-            string arrayText = "";
 
             //System.IO.File.WriteAllText(@"C:\Program Files (x86)\Steam\steamapps\common\Celeste\tiles.txt", text);
             System.IO.File.WriteAllText(@"C:\Program Files (x86)\Steam\steamapps\common\Celeste\readableTextures.txt", readableTextures);
@@ -144,11 +198,24 @@ namespace CelesteBot
                 toWrite = "Tile under player has Center: " + GetXYCenterFromTile(tileLocationUnderPlayer) + " and Tile Loc: " + tileLocationUnderPlayer;
                 toWrite += "\nWith Player pos: " + playerPos;
             }
+            MTexture texture = null;
+            try
+            {
+                texture = GetTile(tileLocationInFront);
+            } catch (NullReferenceException e)
+            {
+                // Texture/Tile does not exist
 
+            }
             if (IsTile(tileLocationInFront))
             {
                 toWrite += "\nTile in front of player has Center: " + GetXYCenterFromTile(tileLocationInFront) + " and Tile Loc: " + tileLocationInFront;
                 toWrite += "\nWith Player facing: " + (player.Facing == (Facings)1 ? "Right" : "Left");
+                if (texture != null)
+                {
+                    toWrite += "\nWith tag: " + tileArray[(int)tileLocationInFront.X, (int)tileLocationInFront.Y].ToString();
+                    toWrite += "\nWhich is " + (IsWall(tileLocationInFront) ? "" : "NOT ") + "a wall";
+                }
             }
             else
             {
@@ -159,20 +226,122 @@ namespace CelesteBot
             System.IO.File.WriteAllText(@"C:\Program Files (x86)\Steam\steamapps\common\Celeste\info.txt", toWrite);
 
 
-            string text2 = "";
+            //string text2 = "";
             string readableText = "";
             for (int i = 0; i < entities.Count; i++)
             {
-                text += entities[i].ToString() + "\n";
-                readableText += "Entity at Position: " + entities[i].Position + " and Center: " + entities[i].Center + " has tag: " + entities[i].Tag + "\n";
+                //text += entities[i].ToString() + "\n";
+                readableText += "Entity at Position: " + entities[i].Position + " and Center: " + entities[i].Center + " has tag: " + entities[i].Tag + " with collision: "+entities[i].Collidable+"\n";
             }
-            System.IO.File.WriteAllText(@"C:\Program Files (x86)\Steam\steamapps\common\Celeste\entities.txt", text2);
+            //System.IO.File.WriteAllText(@"C:\Program Files (x86)\Steam\steamapps\common\Celeste\entities.txt", text2);
             System.IO.File.WriteAllText(@"C:\Program Files (x86)\Steam\steamapps\common\Celeste\readableEntities.txt", readableText);
+        }
+        public static MTexture[,] GetVision()
+        {
+            
+            int visionX = 10;
+            int visionY = 10;
+
+            int underYIndex = visionY / 2 + 1;
+            int underXIndex = visionX / 2;
+            Vector2 tileUnder = GetTileUnderPlayer();
+            /*
+             * 0    1   2   3   4
+             * 1    1   2   3   4
+             * 2    1   2   3   4
+             * 3    1   2   3   4
+             * 4    1   2   3   4
+             * 5    1   2   3   4
+             */
+            MTexture[,] outTextures = new MTexture[visionX, visionY];
+            for (int i = 0; i < visionX; i++)
+            {
+                for (int j = 0; j < visionY; j++)
+                {
+                    outTextures[i, j] = GetTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i));
+                }
+            }
+            string text = new Vector2(tileUnder.X - underXIndex, tileUnder.Y - underYIndex).ToString();
+            text += "\n" + new Vector2(tileUnder.X - underXIndex + visionX - 1, tileUnder.Y - underYIndex + visionY - 1);
+            System.IO.File.WriteAllText(@"C:\Program Files (x86)\Steam\steamapps\common\Celeste\test.txt", text);
+            //outTextures[underXIndex, underYIndex] = GetTile(tileUnder); // fail safe?
+            return outTextures;
+        }
+        public static int[,] GetVisionInt()
+        {
+            int visionX = 5;
+            int visionY = 5;
+
+            int underYIndex = visionY / 2 + 1;
+            int underXIndex = visionX / 2;
+            Vector2 tileUnder = GetTileUnderPlayer();
+            int[,] outInts = new int[visionX, visionY];
+            for (int i = 0; i < visionY; i++)
+            {
+                for (int j = 0; j < visionX; j++)
+                {
+                    int temp = IsWall(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i)) ? 1 : 0;
+                    if (temp == 0)
+                    {
+                        temp = GetEntityFromXYCenter(GetXYCenterFromTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i))) != null ? 1 : 0;
+                    }
+                    outInts[i, j] = temp;
+                }
+            }
+            string text = new Vector2(tileUnder.X - underXIndex, tileUnder.Y - underYIndex).ToString();
+            text += "\n" + new Vector2(tileUnder.X - underXIndex + visionX - 1, tileUnder.Y - underYIndex + visionY - 1);
+            System.IO.File.WriteAllText(@"C:\Program Files (x86)\Steam\steamapps\common\Celeste\test.txt", text);
+            return outInts;
+        }
+        public static void WriteTexturesToFile(string file, MTexture[,] textures)
+        {
+            string text = "";
+            for (int i = 0; i < textures.GetLength(0); i++)
+            {
+                for (int j = 0; j < textures.GetLength(1); j++)
+                {
+                    if (textures[i, j] != null)
+                    {
+                        text += textures[i, j].ToString() + "\t";
+                    } else
+                    {
+                        text += "tilesets/air\t";
+                    }
+                }
+                text += "\n";
+            }
+            System.IO.File.WriteAllText(file, text);
+        }
+        public static void WriteIntsToFile(string file, int[,] ints)
+        {
+            string text = "";
+            for (int i = 0; i < ints.GetLength(0); i++)
+            {
+                for (int j = 0; j < ints.GetLength(1); j++)
+                {
+                    text += ints[i, j] + "\t";
+                }
+                text += "\n";
+            }
+            System.IO.File.WriteAllText(file, text);
+        }
+        private static GamePadState GetGamePadState()
+        {
+            GamePadState currentState = MInput.GamePads[0].CurrentState;
+            for (int i = 0; i < 4; i++)
+            {
+                currentState = GamePad.GetState((PlayerIndex)i);
+                if (currentState.IsConnected)
+                {
+                    break;
+                }
+            }
+            return currentState;
         }
         public static GamePadState CalculateInputs()
         {
             kbState = Keyboard.GetState();
-
+            // THIS MUST BE FIXED!
             GamePadDPad pad = new GamePadDPad(
                 ButtonState.Released,
                 ButtonState.Released,
@@ -183,7 +352,8 @@ namespace CelesteBot
                 sticks,
                 new GamePadTriggers(0, 0),
                 new GamePadButtons(
-                    IsTile(GetTileInFrontOfPlayer()) ? Buttons.A : (Buttons)0
+                    IsWall(GetTileInFrontOfPlayer()) ? Buttons.A : (Buttons)0
+                    //Buttons.A
                     | (Buttons)0
                     | (Buttons)0
                     | (Buttons)0
@@ -194,6 +364,207 @@ namespace CelesteBot
                 pad
             );
             return padState;
+        }
+        public static void UpdateInputs()
+        {
+            kbState = Keyboard.GetState();
+            GamePadState padState = GetGamePadState();
+
+            if (IsKeyDown(Keys.OemBackslash) || IsKeyDown(Keys.OemQuotes))
+            {
+                padState = CalculateInputs();
+
+                bool found = false;
+                for (int i = 0; i < 4; i++)
+                {
+                    MInput.GamePads[i].Update();
+                    if (MInput.GamePads[i].Attached)
+                    {
+                        found = true;
+                        MInput.GamePads[i].CurrentState = padState;
+                    }
+                }
+
+                if (!found)
+                {
+                    MInput.GamePads[0].CurrentState = padState;
+                    MInput.GamePads[0].Attached = true;
+                }
+                MInput.UpdateVirtualInputs();
+                PutEntitiesToFile();
+                //WriteTexturesToFile(@"C:\Program Files (x86)\Steam\steamapps\common\Celeste\vision.txt", GetVision());
+                //WriteIntsToFile(@"C:\Program Files (x86)\Steam\steamapps\common\Celeste\visionInts.txt", GetVisionInt());
+                
+                int[,] ints = GetVisionInt();
+                string text = "";
+                for (int i = 0; i < ints.GetLength(0); i++)
+                {
+                    for (int j = 0; j < ints.GetLength(1); j++)
+                    {
+                        text += ints[i, j] + "\t";
+                    }
+                    text += "\n";
+                }
+                ResetActiveText("Vision:\n");
+                activeText += text;
+                
+                return;
+            }
+            if (!Engine.Instance.IsActive)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    if (MInput.GamePads[i].Attached)
+                    {
+                        MInput.GamePads[i].CurrentState = padState;
+                    }
+                }
+                MInput.UpdateVirtualInputs();
+            }
+
+        }
+        public static void Draw(GameTime gameTime)
+        {
+            //Monocle.Engine.Draw(gameTime);
+            int viewWidth = Engine.ViewWidth;
+            int viewHeight = Engine.ViewHeight;
+
+            Monocle.Draw.SpriteBatch.Begin();
+            try
+            {
+                Monocle.Draw.Rect(textPos.X - 10, textPos.Y - 8, viewWidth - 20f, 40f, Color.Black * 0.8f);
+                ActiveFont.Draw(
+                    activeText,
+                    new Vector2(textPos.X, textPos.Y),
+                    Vector2.Zero,
+                    FontScale,
+                    Color.White);
+                //System.IO.File.WriteAllText(@"C:\Program Files (x86)\Steam\steamapps\common\Celeste\drawTest.txt", "Attempted to draw text!");
+            } catch (NullReferenceException e)
+            {
+                // The game has yet to finish loading, just don't draw text for now.
+            }
+            Monocle.Draw.SpriteBatch.End();
+        }
+        public static void DrawBrain(Genome toDraw)
+        {
+            int viewWidth = Engine.ViewWidth;
+            int viewHeight = Engine.ViewHeight;
+
+            ArrayList nodeLayers = new ArrayList();
+
+            float x = 200;
+            float y = 50;
+            float w = 500;
+            float h = 400;
+            float radius = 4;
+            for (int i = 0; i < toDraw.layers; i++)
+            {
+                ArrayList temp = new ArrayList();
+                foreach (Node n in toDraw.nodes)
+                {
+                    if (n.layer == i)
+                    {
+                        temp.Add(n.clone());
+                        
+                    }
+                }
+                nodeLayers.Add(temp);
+            }
+
+            ArrayList vectorNodes = new ArrayList();
+
+            foreach (ArrayList a in nodeLayers)
+            {
+                foreach (Node n in a)
+                {
+                    vectorNodes.Add(new Vector2(x, y));
+                    y += h / a.Count;
+                }
+                x += w / nodeLayers.Count;
+            }
+
+            foreach (GeneConnection g in toDraw.genes)
+            {
+                Vector2 start = new Vector2(0,0);
+                Vector2 end = new Vector2(0,0);
+                for (int i = 0; i < toDraw.nodes.Count; i++)
+                {
+                    Node temp = (Node)toDraw.nodes[i];
+                    if (temp.id == g.fromNode.id)
+                    {
+                        start = (Vector2)vectorNodes[i];
+                    }
+                    else if (temp.id == g.toNode.id)
+                    {
+                        end = (Vector2)vectorNodes[i];
+                    }
+                    
+                }
+                Color color = Color.Blue;
+                if (g.weight < 0)
+                {
+                    color = Color.Red;
+                }
+                Monocle.Draw.Line(start, end, color);
+            }
+
+            for (int i = 0; i < vectorNodes.Count; i++)
+            {
+                Vector2 v = (Vector2)vectorNodes[i];
+                Node temp = (Node)toDraw.nodes[i];
+                Monocle.Draw.Circle(v.X, v.Y, radius, Color.White, 3, 100);
+                ActiveFont.Draw(
+                    Convert.ToString(temp.id),
+                    new Vector2(v.X, v.Y),
+                    Vector2.Zero,
+                    FontScale,
+                    Color.White);
+            }
+        }
+        /*
+        void drawGraph()
+        {
+            int graphX = 50;
+            int graphY = height - 250;
+            int graphWidth = 1000;
+            int graphHeight = 200;
+            int xInterval = graphWidth / numToSave;
+            int maxScore = 0;
+            for (int i = 0; i < scoresToSave.size(); i++)
+            {
+                if (scoresToSave.get(i) > maxScore)
+                {
+                    maxScore = scoresToSave.get(i);
+                }
+            }
+            int yInterval = graphHeight / (maxScore + 1);
+            if (showLearningGraph)
+            {
+                stroke(255);
+                line(graphX, graphY, graphX, graphY + graphHeight);
+                line(graphX, graphY + graphHeight, graphX + graphWidth, graphY + graphHeight);
+                textSize(15);
+                textAlign(LEFT);
+                text(maxScore, graphX - 30, graphY + 10);
+                if (scoresToSave.size() >= 2)
+                {
+                    for (int i = 0; i < scoresToSave.size() - 1; i++)
+                    {
+                        line(graphX + xInterval * i, graphY + graphHeight - yInterval * scoresToSave.get(i), graphX + xInterval * (i + 1), graphY + graphHeight - yInterval * scoresToSave.get(i + 1));
+                        line(graphX + xInterval * i, graphY + graphHeight + 3, graphX + xInterval * i, graphY + graphHeight - 3);
+                        textAlign(CENTER);
+                        text(pop.gen - scoresToSave.size() + i, graphX + xInterval * i, graphY + graphHeight + 15);
+                    }
+                    line(graphX + xInterval * (scoresToSave.size() - 1), graphY + graphHeight + 3, graphX + xInterval * (scoresToSave.size() - 1), graphY + graphHeight - 3);
+                    text(pop.gen - 1, graphX + xInterval * (scoresToSave.size() - 1), graphY + graphHeight + 15);
+                }
+            }
+        }
+        */
+        public static void ResetActiveText(string reset)
+        {
+            activeText = reset;
         }
     }
 }
