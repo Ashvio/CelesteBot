@@ -145,7 +145,11 @@ namespace CelesteBot_Everest_Interop
             UpdateVision();
             Look();
             Think();
-            CalculateFitness();
+            if (!Replay)
+            {
+                UpdateTarget();
+            }
+            double reward = CalculateReward();
             /*need to incorporate y here, maybe dist to goal here as well*/
             // Compare to distance to fitness target
             if (player.Speed.Length() == 0 || (player.BottomCenter - Target).Length() >= (MaxPlayerPos - Target).Length() && !player.JustRespawned)
@@ -382,7 +386,7 @@ namespace CelesteBot_Everest_Interop
                 } catch (KeyNotFoundException e)
                 {
                     // In a level that doesn't have a valid fitness enumerator
-                    Target = new Vector2(10000, 10000);
+                    Target = new Vector2(10000, -10000);
                     Logger.Log(CelesteBotInteropModule.ModLogKey, "Unknown Fitness Enumerator for: " + level.Session.MapData.Filename + "_" + level.Session.Level + "_" + "0");
                     Logger.Log(CelesteBotInteropModule.ModLogKey, "With FitnessPath: " + enumForLevels);
                 }

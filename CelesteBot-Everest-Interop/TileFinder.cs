@@ -301,6 +301,7 @@ namespace CelesteBot_Everest_Interop
         }
         public static void CacheEntities()
         {
+
             if(framesToCacheWipe > 0)
             {
                 framesToCacheWipe--;

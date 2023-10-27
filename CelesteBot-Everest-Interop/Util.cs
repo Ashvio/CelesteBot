@@ -110,12 +110,12 @@ namespace CelesteBot_Everest_Interop
                         positionalFitnesses.Add(name, new List<Vector2>());
                         velocityFitnesses.Add(name, new List<Vector2>());
                     }
-                    Vector2 toAdd = new Vector2((float)Convert.ToDouble(values[0]), (float)Convert.ToDouble(values[1]));
-                    Vector2 toAdd2 = new Vector2((float)Convert.ToDouble(values[2]), (float)Convert.ToDouble(values[3]));
+                    Vector2 position = new Vector2((float)Convert.ToDouble(values[0]), (float)Convert.ToDouble(values[1]));
+                    Vector2 velocity = new Vector2((float)Convert.ToDouble(values[2]), (float)Convert.ToDouble(values[3]));
 
                     rawLevels.Add(name);
-                    positionalFitnesses[name].Add(toAdd);
-                    velocityFitnesses[name].Add(toAdd2);
+                    positionalFitnesses[name].Add(position);
+                    velocityFitnesses[name].Add(velocity);
                 }
             }
 

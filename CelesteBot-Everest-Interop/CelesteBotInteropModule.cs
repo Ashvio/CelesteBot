@@ -579,7 +579,7 @@ namespace CelesteBot_Everest_Interop
                     if (CurrentPlayer.Dead)
                     {
                         CelesteBotManager.QIterations++;
-                        CurrentPlayer.CalculateFitness();
+                        CurrentPlayer.CalculateReward();
                         if (CurrentPlayer.Fitness > population.BestFitness)
                         {
                             population.BestFitness = CurrentPlayer.Fitness;

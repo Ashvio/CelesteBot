@@ -5,8 +5,12 @@ using Monocle;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Python;
+using Python.Runtime;
+using System.IO;
+using System.Reflection;
 /*
- * The selected code block belongs to the CelesteBotManager class and is found in the CelesteBotManager.cs file.
+* The selected code block belongs to the CelesteBotManager class and is found in the CelesteBotManager.cs file.
 This class contains various member variables that hold the configurations for the program as well as some utility 
 methods namely Initialize, Draw, UpdateQTable.
 The CelesteBotManager class contains parameters that configure the way the NEAT algorithm functions when training,
@@ -17,8 +21,8 @@ The Initialize method loads the configuration settings that can be modified by t
 variables. The Draw method is responsible for rendering visual elements like graphs and the player's neural network. 
 Finally, the UpdateQTable method performs the necessary calculations on the current state and action, thus updating the 
 Q Table for the player.
- * 
- */
+* 
+*/
 namespace CelesteBot_Everest_Interop
 {
     public class CelesteBotManager
@@ -31,8 +35,8 @@ namespace CelesteBot_Everest_Interop
 
         public static double WEIGHT_MAXIMUM = 3; // Max magnitude a weight can be (+- this number)
         
-        public static int VISION_2D_X_SIZE = 5; // X Size of the Vision array
-        public static int VISION_2D_Y_SIZE = 5; // Y Size of the Vision array
+        public static int VISION_2D_X_SIZE = 10; // X Size of the Vision array
+        public static int VISION_2D_Y_SIZE = 10; // Y Size of the Vision array
         public static int TILE_2D_X_CACHE_SIZE = 1000;
         public static int TILE_2D_Y_CACHE_SIZE = 1000;
         public static int ENTITY_CACHE_UPDATE_FRAMES = 10;
@@ -83,8 +87,66 @@ namespace CelesteBot_Everest_Interop
         public static double QEpsilon = CelesteBotInteropModule.Settings.MaxQEpsilon / 100.0;
         public static int QGraphIterations { get { return CelesteBotInteropModule.Settings.QGraphIterations; } set { } }
 
+        private static Assembly ResolvePython(object sender, ResolveEventArgs args)
+        {
+            // Forbid non handled dll's
+            if (!args.Name.Contains("Python.Runtime"))
+            {
+                return null;
+            }
+            string LIBS_PATH = @"Lib\pythonnet\runtime\site-packages";
+            string ASSEMBLY_FILE = "Python.Runtime.dll";
+            string pythonHome = Environment.GetEnvironmentVariable("PYTHONHOME");
+            string targetPath = Path.Combine(pythonHome, LIBS_PATH, ASSEMBLY_FILE);
+
+            try
+            {
+                return Assembly.LoadFile(targetPath);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+        private static void InitializeAssembly()
+        {
+            // virtual env setup
+            var pathToVirtualEnv = Environment.GetEnvironmentVariable("PYTHONNET_PYDLL");
+            pathToVirtualEnv = Path.GetDirectoryName(pathToVirtualEnv);
+            var path = Environment.GetEnvironmentVariable("PATH").TrimEnd(';');
+            path = string.IsNullOrEmpty(path) ? pathToVirtualEnv : path + ";" + pathToVirtualEnv;
+            // set path
+            Environment.SetEnvironmentVariable("PATH", path, EnvironmentVariableTarget.Process);
+            // python home
+            Environment.SetEnvironmentVariable("PYTHONHOME", pathToVirtualEnv, EnvironmentVariableTarget.Process);
+            // python path
+            Environment.SetEnvironmentVariable("PYTHONPATH", $"{pathToVirtualEnv}\\Lib\\site-packages;{pathToVirtualEnv}\\Lib", EnvironmentVariableTarget.Process);
+
+            AppDomain.CurrentDomain.AssemblyResolve += ResolvePython;
+        }
+        private static void InitializePythonNET()
+        {
+            // Configure PythonNET interoperability using a python virtual env.
+            // Store your Python DLL as an environment variable "PYTHONNET_PYDLL" before running.
+
+            PythonEngine.Initialize();
+            PythonEngine.BeginAllowThreads();
+            Py.GIL();
+            string pythonFile = @"rl_client\celestebot_client.py";
+
+            var scope = Py.CreateScope();
+            string code = File.ReadAllText(pythonFile);
+            var scriptCompiled = PythonEngine.Compile(code, pythonFile); // Compile the code/file
+            scope.Execute(scriptCompiled); // Execute the compiled python so we can start calling it.
+            PyObject test = scope.Get("test"); // Lets get an instance of the class in python
+            PyObject pythongReturn = test.Invoke(new PyString("sayHello")); // Call the sayHello function on the exampleclass object
+            var result = pythongReturn.AsManagedObject(typeof(string)) as string;
+            Logger.Log(CelesteBotInteropModule.ModLogKey, result);
+        }
         public static void Initialize()
         {
+            InitializeAssembly();
+            InitializePythonNET();
             ACTION_THRESHOLD = (float)(Convert.ToDouble(CelesteBotInteropModule.Settings.ActionThreshold) / 100.0); // The value that must be surpassed for the output to be accepted
             RE_RANDOMIZE_WEIGHT_CHANCE = (float)(Convert.ToDouble(CelesteBotInteropModule.Settings.ReRandomizeWeightChance) / 100.0); // The chance for the weight to be re-randomized
             WEIGHT_MUTATION_CHANCE = (float)(Convert.ToDouble(CelesteBotInteropModule.Settings.MutateWeight) / 100.0); // The chance for a weight to be mutated
@@ -119,7 +181,8 @@ namespace CelesteBot_Everest_Interop
 
             PLAYER_GRACE_BUFFER = 160; // How long between restarts should the next player be created, some arbitrary number of frames
             PLAYER_DEATH_TIME_BEFORE_RESET = 4; // How many seconds after a player dies should the next player be created and the last one deleted
-    }
+            
+        }
 
         public static void Draw()
         {
