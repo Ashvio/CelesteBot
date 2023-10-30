@@ -1,5 +1,5 @@
 # CelesteBot
-A complete system to train and run a Reinforcement Learning agent that can play Celeste, using PPO. The system has a somewhat complex architecture, interfacing through Everest to retrieve Celeste game data as well as send inputs to the game, and interfacing with Python to run the actual RL algorithm through Ray RL Lib. The Celeste client uses PythonNET to interface with a Ray client instance which interfaces with a centralized Ray server that can handle training several game clients simultaneously. Currently being developed by Ashvio, but the codebase is based on scad2's original work in 2019.
+A complete system to train and run a Reinforcement Learning agent that can play Celeste, using PPO. The system has a somewhat complex architecture, interfacing through Everest to retrieve Celeste game data as well as send inputs to the game, and interfacing with Python to run the actual RL algorithm through Ray RL Lib. The Celeste client uses PythonNET to interface with a Ray client instance which interfaces with a centralized Ray server that can handle training several game clients simultaneously. Currently being developed by Ashvio, but the codebase is from from sc2ad's original work in 2019.
 ## Getting Started
 These instructions should help you get started running and developing for CelesteBot.
 ### Installing
