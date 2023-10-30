@@ -1,0 +1,6 @@
+- Name: CelesteBot_2023
+  Version: 0.1.0
+  DLL: Code/CelesteBot_2023.dll
+  Dependencies:
+    - Name: EverestCore
+      Version: 1.4054.0

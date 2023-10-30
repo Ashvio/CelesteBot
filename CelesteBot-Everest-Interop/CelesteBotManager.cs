@@ -87,27 +87,27 @@ namespace CelesteBot_Everest_Interop
         public static double QEpsilon = CelesteBotInteropModule.Settings.MaxQEpsilon / 100.0;
         public static int QGraphIterations { get { return CelesteBotInteropModule.Settings.QGraphIterations; } set { } }
 
-        private static Assembly ResolvePython(object sender, ResolveEventArgs args)
-        {
-            // Forbid non handled dll's
-            if (!args.Name.Contains("Python.Runtime"))
-            {
-                return null;
-            }
-            string LIBS_PATH = @"Lib\pythonnet\runtime\site-packages";
-            string ASSEMBLY_FILE = "Python.Runtime.dll";
-            string pythonHome = Environment.GetEnvironmentVariable("PYTHONHOME");
-            string targetPath = Path.Combine(pythonHome, LIBS_PATH, ASSEMBLY_FILE);
+        //private static Assembly ResolvePython(object sender, ResolveEventArgs args)
+        //{
+        //    // Forbid non handled dll's
+        //    if (!args.Name.Contains("Python.Runtime"))
+        //    {
+        //        return null;
+        //    }
+        //    string LIBS_PATH = @"Lib\pythonnet\runtime\site-packages";
+        //    string ASSEMBLY_FILE = "Python.Runtime.dll";
+        //    string pythonHome = Environment.GetEnvironmentVariable("PYTHONHOME");
+        //    string targetPath = Path.Combine(pythonHome, LIBS_PATH, ASSEMBLY_FILE);
 
-            try
-            {
-                return Assembly.LoadFile(targetPath);
-            }
-            catch (Exception)
-            {
-                return null;
-            }
-        }
+        //    try
+        //    {
+        //        return Assembly.LoadFile(targetPath);
+        //    }
+        //    catch (Exception)
+        //    {
+        //        return null;
+        //    }
+        //}
         private static void InitializeAssembly()
         {
             // virtual env setup
@@ -120,9 +120,11 @@ namespace CelesteBot_Everest_Interop
             // python home
             Environment.SetEnvironmentVariable("PYTHONHOME", pathToVirtualEnv, EnvironmentVariableTarget.Process);
             // python path
-            Environment.SetEnvironmentVariable("PYTHONPATH", $"{pathToVirtualEnv}\\Lib\\site-packages;{pathToVirtualEnv}\\Lib", EnvironmentVariableTarget.Process);
+            string libSitePackages = Path.Combine(pathToVirtualEnv, "Lib", "site-packages");
+            string libPackages = Path.Combine(pathToVirtualEnv, "Lib");
+            Environment.SetEnvironmentVariable("PYTHONPATH", $@"{libSitePackages};{libPackages}", EnvironmentVariableTarget.Process);
 
-            AppDomain.CurrentDomain.AssemblyResolve += ResolvePython;
+            //AppDomain.CurrentDomain.AssemblyResolve += ResolvePython;
         }
         private static void InitializePythonNET()
         {
