@@ -213,7 +213,7 @@ namespace CelesteBot_Everest_Interop
             for (int i = 1; i < Pop.Count; i++)
             {
                 CelestePlayer p = (CelestePlayer)Pop[i];
-                p.CalculateFitness();
+                p.CalculateReward();
             }
         }
         // Sorts the players within a species and the species by their fitnesses

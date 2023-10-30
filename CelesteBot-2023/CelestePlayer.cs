@@ -1,97 +1,59 @@
 ﻿using Celeste;
 using Celeste.Mod;
 using Microsoft.Xna.Framework;
-using Monocle;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Runtime.Serialization;
 /*
- * The CelestePlayer class represents the player in the game and is located in the same file as the CelesteBotInteropModule. 
- * It contains a Brain property which represents its neural network, a Fitness property to keep track of its performance in
- * the game, InputData and Vision properties which are used to provide input to the neural network, and various other properties
- * and methods related to gameplay.
+* The CelestePlayer class represents the player in the game and is located in the same file as the CelesteBotInteropModule. 
+* It contains a Brain property which represents its neural network, a Fitness property to keep track of its performance in
+* the game, InputData and Vision properties which are used to provide input to the neural network, and various other properties
+* and methods related to gameplay.
 The Brain property is used to decide which actions to take based on the inputs given to it. The Population of players contains 
 multiple instances of CelestePlayer. During gameplay, the current player is retrieved from the Population and manipulated using
 the CurrentPlayer property.
- */
-namespace CelesteBot_Everest_Interop
+*/
+namespace CelesteBot_2023
 {
-    [KnownType(typeof(CelestePlayer))]
-    [DataContract]
     public class CelestePlayer : IDisposable
     {
-        [DataMember]
         int[][] Vision2D = new int[CelesteBotManager.VISION_2D_X_SIZE][];
-        
-        public Player player;
-        [DataMember]
-        Vector2 startPos = new Vector2(0,0);
 
-        [DataMember]
+        public Player player;
+        Vector2 startPos = new Vector2(0, 0);
+
         public float Fitness = -1;
-        [DataMember]
         public double LastPlayerPosition = 0;
-        [DataMember]
         private float AverageSpeed = 0;
-        [DataMember]
         private float AverageStamina = 110;
-        [DataMember]
         public float UnadjustedFitness;
-        [DataMember]
-        public Genome Brain;
-        [DataMember]
         public ArrayList ReplayActions = new ArrayList();
-        [DataMember]
-        public float[] Vision = new float[CelesteBotManager.INPUTS];
-        [DataMember]
         public float[] Actions = new float[CelesteBotManager.OUTPUTS];
-        [DataMember]
         public int Lifespan = 0;
-        [DataMember]
         public bool Dead = false;
-        [DataMember]
         public bool Replay = false;
-        [DataMember]
-        public int Gen = 0;
-        [DataMember]
         private Stopwatch timer;
-        [DataMember]
         private Stopwatch deathTimer;
-        [DataMember]
         public string Name;
-        [DataMember]
-        public string SpeciesName = "Not yet defined";
 
         // Target Fitness and stuff
-        [DataMember]
         public string FitnessPath = @"fitnesses.fit";
-        [DataMember]
         public Dictionary<string, List<Vector2>> positionFitnesses;
-        [DataMember]
         public Dictionary<string, List<Vector2>> velocityFitnesses;
 
-        [DataMember]
         public Vector2 Target = Vector2.Zero;
-        [DataMember]
         public int TargetsPassed = 0;
 
-        [DataMember]
         private List<Vector2>.Enumerator enumForFitness;
-        [DataMember]
         private List<string>.Enumerator enumForLevels;
 
-        [DataMember]
         private Vector2 MaxPlayerPos = new Vector2(-10000, -10000);
 
-        [DataMember]
         public bool VisionSetup = false;
-        [DataMember]
         public List<double> Rewards;
+
+        public bool DeathFlag { get; private set; }
 
         public CelestePlayer()
         {
@@ -99,9 +61,6 @@ namespace CelesteBot_Everest_Interop
             {
                 Vision2D[i] = new int[CelesteBotManager.VISION_2D_Y_SIZE];
             }
-
-            Brain = new Genome(CelesteBotManager.INPUTS, CelesteBotManager.OUTPUTS);
-            Name = CelesteBotManager.GetUniqueOrganismName();
             timer = new Stopwatch();
             deathTimer = new Stopwatch();
             positionFitnesses = Util.GetPositionFitnesses(FitnessPath);
@@ -123,7 +82,8 @@ namespace CelesteBot_Everest_Interop
                     {
                         startPos = player.BottomCenter;
                     }
-                } catch (NullReferenceException e)
+                }
+                catch (NullReferenceException e)
                 {
                     Logger.Log(CelesteBotInteropModule.ModLogKey, "Player has not been created yet, or is null for some other reason.");
                     return;
@@ -143,13 +103,16 @@ namespace CelesteBot_Everest_Interop
                 //return;
             }
             UpdateVision();
-            Look();
-            Think();
+            CelesteBotManager.Log("Visions calculated");
+
+            CalculateGameState();
+            CelesteBotManager.Log("Game state calculated");
+            //Look();
+            //Think();
             if (!Replay)
             {
                 UpdateTarget();
             }
-            double reward = CalculateReward();
             /*need to incorporate y here, maybe dist to goal here as well*/
             // Compare to distance to fitness target
             if (player.Speed.Length() == 0 || (player.BottomCenter - Target).Length() >= (MaxPlayerPos - Target).Length() && !player.JustRespawned)
@@ -158,11 +121,12 @@ namespace CelesteBot_Everest_Interop
                 {
                     timer.Start();
                 }
-            } else
+            }
+            else
             {
                 timer.Reset(); // Resets TimeWhileStuck if it starts moving again!
             }
-            if (timer.ElapsedMilliseconds * CelesteBotInteropModule.FrameLoops > CelesteBotInteropModule.Settings.TimeStuckThreshold * 1000 && !player.Dead && !deathTimer.IsRunning)
+            if (timer.ElapsedMilliseconds * CelesteBotInteropModule.FrameLoops > CelesteBotInteropModule.Settings.TimeStuckThreshold * 100000 && !player.Dead && !deathTimer.IsRunning)
             {
                 // Kill the player because it hasn't moved for awhile
                 Dead = true;
@@ -185,7 +149,8 @@ namespace CelesteBot_Everest_Interop
             {
                 //TileFinder.TilesOffset = Celeste.Celeste.Scene.Entities.FindFirst<SolidTiles>().Center; // Thanks KDT#7539!
                 TileFinder.SetupOffset();
-            } catch (NullReferenceException e)
+            }
+            catch (NullReferenceException e)
             {
                 // The Scene hasn't been created yet.
             }
@@ -202,7 +167,8 @@ namespace CelesteBot_Everest_Interop
             try
             {
                 Level level = (Level)Celeste.Celeste.Scene;
-            } catch (InvalidCastException e)
+            }
+            catch (InvalidCastException e)
             {
                 // This means we tried to cast a LevelExit to a Level. It basically means we are dead.
                 //Dead = true;
@@ -210,7 +176,7 @@ namespace CelesteBot_Everest_Interop
                 return;
             }
 
-            Vector2 tileUnder = TileFinder.GetTileXY(new Vector2(player.X, player.Y+4));
+            Vector2 tileUnder = TileFinder.GetTileXY(new Vector2(player.X, player.Y + 4));
             //Logger.Log(CelesteBotInteropModule.ModLogKey, "Tile Under Player: (" + tileUnder.X + ", " + tileUnder.Y + ")");
             //Logger.Log(CelesteBotInteropModule.ModLogKey, "(X,Y) Under Player: (" + player.X + ", " + (player.Y + 4) + ")");
             // 1 = Air, 2 = Wall, 4 = Entity
@@ -252,12 +218,15 @@ namespace CelesteBot_Everest_Interop
         //{
 
         //}
-        void Look()
+        void CalculateGameState()
         {
-            if (player == null)
+            if (player == null && DeathFlag)
             {
                 // We are waiting for the death timer to expire
                 return;
+            } else if (player == null && !DeathFlag)
+            {
+                DeathFlag = true;
             }
             // Updates vision array with proper values each frame
             /*
@@ -266,20 +235,17 @@ namespace CelesteBot_Everest_Interop
             Outputs: U, D, L, R, Jump, Dash, Climb
             If any of the outputs are above 0.7, apply them when returning controller output
             */
+            double reward = CalculateReward();
 
-            for (int i = 0; i < CelesteBotManager.VISION_2D_X_SIZE; i++)
-            {
-                for (int j = 0; j < CelesteBotManager.VISION_2D_Y_SIZE; j++)
-                {
-                    Vision[i * CelesteBotManager.VISION_2D_Y_SIZE + j] = Vision2D[j][i];
-                }
-            }
-            Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE] = player.BottomCenter.X;
-            Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 1] = player.BottomCenter.Y;
-            Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 2] = player.Speed.X;
-            Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 3] = player.Speed.Y;
-            Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 4] = player.CanDash ? 1 : 0;
-            Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 5] = CelesteBotManager.Normalize(player.Stamina, -1, 120);
+            GameState CurrentGameState = new GameState(Vision2D, player.Speed.X, player.Speed.Y, player.Stamina, player.CanDash, reward, DeathFlag);
+            CelesteBotInteropModule.ObservationManager.AddObservation(CurrentGameState);
+
+            //Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE] = player.BottomCenter.X;
+            //Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 1] = player.BottomCenter.Y;
+            //Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 2] = player.Speed.X;
+            //Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 3] = player.Speed.Y;
+            //Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 4] = player.CanDash ? 1 : 0;
+            //Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 5] = CelesteBotManager.Normalize(player.Stamina, -1, 120);
         }
         // Updates controller inputs based on neural network output
         void Think()
@@ -289,42 +255,15 @@ namespace CelesteBot_Everest_Interop
                 // We are waiting for the death timer to expire
                 return;
             }
-            //get the output of the neural network
-            if (CelesteBotInteropModule.LearningStyle == LearningStyle.NEAT)
-            {
-                if(deathTimer.IsRunning)
-                {
-                    Actions = new float[] { 0, 0, 0, 0, 0, 0};
-                }
-                else
-                {
-                    Actions = Brain.FeedForward(Vision);
-                }
-                InputData inp = new InputData(Actions);
-                CelesteBotInteropModule.inputPlayer.UpdateData(inp); // Updates inputs to reflect neural network results
-            } else if (CelesteBotInteropModule.LearningStyle == LearningStyle.Q)
-            {
-                CalculateQAction();
-            }
+
+            // Get action here
+            //CelesteBotInteropModule.inputPlayer.UpdateData(inp);
             //Logger.Log(CelesteBotInteropModule.ModLogKey, test);
             //Logger.Log(CelesteBotInteropModule.ModLogKey, "Attempted Input: " + new InputData(Actions));
             // Need to convert actions float values into controller inputs here.
             // Then needs to return controller inputs so that the player can move
         }
-        // Calculates and Pushes an action according to QLearning
-        public void CalculateQAction()
-        {
-            // Should we be exploring or exploiting?
-            if (CelesteBotManager.QEpsilon <= new Random(Guid.NewGuid().GetHashCode()).NextDouble())
-            {
-                // Exploitation
-                CelesteBotInteropModule.inputPlayer.UpdateData(QTable.GetAction(CelesteBotManager.qTable.GetMaxActionIndex(new QState(this))));
-            } else
-            {
-                // Exploration
-                CelesteBotInteropModule.inputPlayer.UpdateData(QTable.GetRandomAction());
-            }
-        }
+
         // Calculates a reward for QLearning
         public double CalculateReward()
         {
@@ -342,7 +281,7 @@ namespace CelesteBot_Everest_Interop
             }
             double reward = -(quasiFitness - LastPlayerPosition) / (1.0 / 60.0) * 10;
             LastPlayerPosition = quasiFitness;
-            
+
             // Maybe change reward to be dFitness/dt?
             return reward;
         }
@@ -352,8 +291,6 @@ namespace CelesteBot_Everest_Interop
             CelestePlayer outp = new CelestePlayer();
             outp.Replay = false;
             //outp.Fitness = Fitness;
-            outp.Gen = Gen;
-            outp.Brain = Brain.Clone();
             return outp;
         }
         // Clones for replaying
@@ -363,10 +300,7 @@ namespace CelesteBot_Everest_Interop
             outp.ReplayActions = (ArrayList)ReplayActions.Clone();
             outp.Replay = true;
             outp.Fitness = Fitness;
-            outp.Gen = Gen;
-            outp.Brain = Brain.Clone();
             outp.Name = Name;
-            outp.SpeciesName = SpeciesName;
             return outp;
         }
         private void UpdateTarget()
@@ -383,7 +317,8 @@ namespace CelesteBot_Everest_Interop
                     enumForFitness.MoveNext();
                     Target = enumForFitness.Current;
                     Logger.Log(CelesteBotInteropModule.ModLogKey, "Key: " + enumForLevels.Current + "==" + level.Session.MapData.Filename + "_" + level.Session.Level + "_" + "0" + " out: " + Target.ToString());
-                } catch (KeyNotFoundException e)
+                }
+                catch (KeyNotFoundException)
                 {
                     // In a level that doesn't have a valid fitness enumerator
                     Target = new Vector2(10000, -10000);
@@ -435,96 +370,18 @@ namespace CelesteBot_Everest_Interop
         // Getter method for fitness (rarely used)
         public float GetFitness()
         {
-            if (!Replay) {
+            if (!Replay)
+            {
                 CalculateFitness();
             }
             return Fitness;
         }
         // Crossover function - less fit parent is parent2
-        public CelestePlayer Crossover(CelestePlayer parent2)
-        {
-            CelestePlayer child = new CelestePlayer();
-
-            child.Brain = Brain.Crossover(parent2.Brain);
-            child.Brain.GenerateNetwork();
-
-            return child;
-        }
-        public override string ToString()
-        {
-            string outp = "P<Name:" + Name;
-            outp += ", speciesName:" + SpeciesName;
-            outp += ", gen:" + Gen;
-            outp += ", fitness:" + Fitness;
-            outp += ", replay:" + Replay;
-            outp += ", ACTIONS:`";
-            foreach (float[] f in ReplayActions)
-            {
-                outp += "<";
-                for (int i = 0; i < f.Length; i++)
-                {
-                    outp += f[i] + ", ";
-                }
-                outp = outp.Substring(0, outp.Length - 2); // Removes ", " at end
-                outp += ">, ";
-            }
-            outp = outp.Substring(0, outp.Length - 2); // Removes ", " at end
-            outp += ", " + Brain + ">";
-            return outp;
-        }
-        public static CelestePlayer PlayerFromString(String str)
-        {
-            try
-            {
-                str = str.Split(new string[] { "P<" }, StringSplitOptions.None)[1];
-                String name = str.Split(new string[] { "Name:" }, StringSplitOptions.None)[1].Split(new string[] { ", " }, StringSplitOptions.None)[0];
-                String speciesName = str.Split(new string[] { "speciesName:" }, StringSplitOptions.None)[1].Split(new string[] { ", " }, StringSplitOptions.None)[0];
-                int gen = Convert.ToInt32(str.Split(new string[] { "gen:" }, StringSplitOptions.None)[1].Split(new string[] { ", " }, StringSplitOptions.None)[0]);
-                float fitness = (float)Convert.ToDouble(str.Split(new string[] { "fitness:" }, StringSplitOptions.None)[1].Split(new string[] { ", " }, StringSplitOptions.None)[0]);
-                int bestScore = Convert.ToInt32(str.Split(new string[] { "bestScore:" }, StringSplitOptions.None)[1].Split(new string[] { ", " }, StringSplitOptions.None)[0]);
-                bool replay = Convert.ToBoolean(str.Split(new string[] { "replay:" }, StringSplitOptions.None)[1].Split(new string[] { ", " }, StringSplitOptions.None)[0]);
-                String forActions = str.Split(new string[] { ", ACTIONS:`" }, StringSplitOptions.None)[1].Split(new string[] { ", GENOME" }, StringSplitOptions.None)[0];
-                ArrayList replayActions = new ArrayList();
-                while (forActions.Contains(">"))
-                {
-                    String singleton = forActions.Split(new string[] { "<" }, StringSplitOptions.None)[1].Split(new string[] { ">" }, StringSplitOptions.None)[0];
-                    String[] arr = singleton.Split(new string[] { ", " }, StringSplitOptions.None); // Gets all of the floats individually
-                    if (arr.Length == 0)
-                    {
-                        arr = new String[] { singleton };
-                    }
-                    int len = arr.Length;
-                    float[] floats = new float[len];
-                    for (int i = 0; i < len; i++)
-                    {
-                        floats[i] = (float)Convert.ToDouble(arr[i]);
-                    }
-                    replayActions.Add(floats);
-                    forActions = forActions.Substring(forActions.IndexOf(">") + 1, forActions.Length);
-                }
-                Genome brain = Genome.GenomeFromString(str);
-                CelestePlayer outp = new CelestePlayer();
-                outp.ReplayActions = (ArrayList)replayActions.Clone();
-                outp.Replay = false;
-                outp.Fitness = fitness;
-                outp.Gen = gen;
-                outp.Brain = brain.Clone();
-                outp.Name = name;
-                outp.SpeciesName = speciesName;
-                return outp;
-            }
-            catch (Exception e)
-            {
-                return null;
-            }
-        }
 
         public void Dispose()
         {
             Vision2D = null;
-            Vision = null;
             ReplayActions = null;
-            Brain = null;
             Actions = null;
         }
     }

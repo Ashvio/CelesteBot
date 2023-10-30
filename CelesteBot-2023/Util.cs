@@ -1,71 +1,15 @@
-﻿using Celeste.Mod;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml;
-using System.Xml.Serialization;
-using System.Runtime.Serialization.Json;
 
-namespace CelesteBot_Everest_Interop
+namespace CelesteBot_2023
 {
     public class Util
     {
         private static Dictionary<string, List<Vector2>> positionalFitnesses;
         private static Dictionary<string, List<Vector2>> velocityFitnesses;
         private static List<string> rawLevels;
-        public static void SerializeObject(Population pop, string fileName)
-        {
-            if (pop == null) { return; }
 
-            try
-            {
-                using (Stream stream = File.Create(fileName))
-                {
-                    DataContractSerializerSettings settings = new DataContractSerializerSettings();
-                    settings.KnownTypes = new List<Type> { typeof(CelestePlayer), typeof(ConnectionHistory), typeof(GeneConnection), typeof(Genome), typeof(Node), typeof(Population), typeof(Species) };
-                    DataContractSerializer serializer = new DataContractSerializer(typeof(Population), settings);
-                    serializer.WriteObject(stream, pop);
-                    stream.Close();
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Log(CelesteBotInteropModule.ModLogKey, "An exception happened when attempting to save a checkpoint!");
-                Logger.Log(CelesteBotInteropModule.ModLogKey, ex.ToString());
-            }
-        }
-        public static Population DeSerializeObject(string fileName)
-        {
-            if (string.IsNullOrEmpty(fileName)) { return default(Population); }
-
-            Population objectOut = default(Population);
-
-            try
-            {
-                using (Stream stream = File.OpenRead(fileName))
-                {
-                    DataContractSerializerSettings settings = new DataContractSerializerSettings();
-                    settings.KnownTypes = new List<Type> { typeof(CelestePlayer), typeof(ConnectionHistory), typeof(GeneConnection), typeof(Genome), typeof(Node), typeof(Population), typeof(Species) };
-                    DataContractSerializer serializer = new DataContractSerializer(typeof(Population), settings);
-                    stream.Position = 0;
-                    objectOut = (Population)serializer.ReadObject(stream);
-                    stream.Close();
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Log(CelesteBotInteropModule.ModLogKey, "An exception happened when attempting to load a checkpoint!");
-                Logger.Log(CelesteBotInteropModule.ModLogKey, ex.ToString());
-            }
-
-            return objectOut;
-        }
         public static IEnumerable<T> SliceRow<T>(T[,] array, int row)
         {
             for (var i = 0; i < array.GetLength(0); i++)
@@ -105,7 +49,8 @@ namespace CelesteBot_Everest_Interop
                         // (shift-space?): Will cross the room again (need to keep track of rooms that we will cross many times)
                         // (space): Will only enter-exit the room once
                         // The data that this dictionary contains should now be objects instead of vector2 lists... they need to contains lots of info, so lets set that up too.
-                    } else
+                    }
+                    else
                     {
                         positionalFitnesses.Add(name, new List<Vector2>());
                         velocityFitnesses.Add(name, new List<Vector2>());
