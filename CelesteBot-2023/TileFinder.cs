@@ -3,10 +3,6 @@ using Celeste.Mod;
 using Microsoft.Xna.Framework;
 using Monocle;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CelesteBot_2023
 {
@@ -35,7 +31,7 @@ namespace CelesteBot_2023
         private static SolidTiles tiles;
         public static MTexture[,] tileArray;
 
-        public static Vector2 TilesOffset = new Vector2(0,0); // TilesOffset for SolidsData offset
+        public static Vector2 TilesOffset = new Vector2(0, 0); // TilesOffset for SolidsData offset
 
         private static int framesToCacheWipe = CelesteBotManager.ENTITY_CACHE_UPDATE_FRAMES;
         private static Level cachedLevel;
@@ -76,10 +72,12 @@ namespace CelesteBot_2023
                 celesteLevel = (Level)Celeste.Celeste.Scene;
                 tiles = celesteLevel.SolidTiles;
                 tileArray = tiles.Tiles.Tiles.ToArray();
-            } catch (NullReferenceException e)
+            }
+            catch (NullReferenceException e)
             {
                 // level does not exist
-            } catch (InvalidCastException e)
+            }
+            catch (InvalidCastException e)
             {
                 // level does not exist
             }
@@ -161,7 +159,7 @@ namespace CelesteBot_2023
         {
             try
             {
-                
+
                 if (tileArray[(int)tile.X, (int)tile.Y] != null)
                 {
                     if (!tileArray[(int)tile.X, (int)tile.Y].Equals("tilesets/scenery"))
@@ -195,7 +193,8 @@ namespace CelesteBot_2023
                         {
                             Spikes s = (Spikes)entities[i];
                             return true;
-                        } catch (InvalidCastException e)
+                        }
+                        catch (InvalidCastException e)
                         {
                             // Not a Spike at this tile
                             return false;
@@ -227,14 +226,15 @@ namespace CelesteBot_2023
                     }
                 }
                 return false;
-            } catch (NullReferenceException e)
+            }
+            catch (NullReferenceException e)
             {
                 return false;
             }
         }
         public static Entity GetEntityAtTile(Vector2 tile)
         {
-            if(cachedLevel != celesteLevel)
+            if (cachedLevel != celesteLevel)
             {
                 cachedLevel = celesteLevel;
                 tileCache = new Entity[tileCache.GetLength(0), tileCache.GetLength(1)];
@@ -248,7 +248,7 @@ namespace CelesteBot_2023
                 xind = (int)(cacheOffset.X + tile.X);
                 yind = (int)(cacheOffset.Y + tile.Y);
             }
-            
+
             if (tileCache[xind, yind] == Entity.Unset)
             {
                 EntityList entities = Celeste.Celeste.Scene.Entities;
@@ -265,13 +265,13 @@ namespace CelesteBot_2023
                     tileCache[xind, yind] = Entity.Air;
                 }
             }
-            
-            if(tileCache[xind, yind] == Entity.Tile)
+
+            if (tileCache[xind, yind] == Entity.Tile)
             {
                 //Logger.Log(LogLevel.Debug, "BOT_TEST", cache[xind, yind, 0].ToString() + " at " + xind.ToString() + ", " + yind.ToString() + ", 0");
                 return tileCache[xind, yind];
             }
-            else if(entityCache[xind, yind] != Entity.Unset)
+            else if (entityCache[xind, yind] != Entity.Unset)
             {
                 //Logger.Log(LogLevel.Debug, "BOT_TEST", cache[xind, yind, 1].ToString() + " at " + xind.ToString() + ", " + yind.ToString() + ", 1");
                 return entityCache[xind, yind];
@@ -288,11 +288,11 @@ namespace CelesteBot_2023
             {
                 celesteLevel = (Level)Celeste.Celeste.Scene;
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 return;
             }
-            if(tiles != celesteLevel.SolidTiles)
+            if (tiles != celesteLevel.SolidTiles)
             {
                 tiles = celesteLevel.SolidTiles;
                 tileArray = tiles.Tiles.Tiles.ToArray();
@@ -302,7 +302,7 @@ namespace CelesteBot_2023
         public static void CacheEntities()
         {
 
-            if(framesToCacheWipe > 0)
+            if (framesToCacheWipe > 0)
             {
                 framesToCacheWipe--;
                 return;
@@ -313,18 +313,19 @@ namespace CelesteBot_2023
             EntityList entities = Celeste.Celeste.Scene.Entities;
             for (int i = 0; i < entities.Count; i++)
             {
-                if(entities[i].Collidable && entities[i].Collider != null && !(entities[i] is SolidTiles) && !(entities[i] is Player))
+                if (entities[i].Collidable && entities[i].Collider != null && !(entities[i] is SolidTiles) && !(entities[i] is Player))
                 {
                     //Logger.Log(LogLevel.Debug, "BOT_TEST", entities[i].GetType().ToString());
                     Entity type;
-                    if (!Enum.TryParse<Entity>(entities[i].GetType().ToString().Substring(8), out type)) {
+                    if (!Enum.TryParse<Entity>(entities[i].GetType().ToString().Substring(8), out type))
+                    {
                         type = Entity.Other;
                         Logger.Log(LogLevel.Debug, "celeste-bot", "Entity of type " + entities[i].GetType() + " not handled, add it to the Entity enum in TileFinder.cs");
                     }
                     Rectangle rect = entities[i].Collider.Bounds;
                     //Logger.Log(LogLevel.Debug, "BOT_TEST", rect.Left.ToString() + " " + rect.Right.ToString() + " " + rect.Bottom.ToString() + " " + rect.Top.ToString());
                     int j = rect.Left;
-                    if(j % 8 == 0)
+                    if (j % 8 == 0)
                     {
                         j += 1;
                     }
@@ -369,9 +370,9 @@ namespace CelesteBot_2023
             int xoff = (int)cacheOffset.X;
             int yoff = (int)cacheOffset.Y;
 
-            for(int i = 0; i < tileCache.GetLength(0); i++)
+            for (int i = 0; i < tileCache.GetLength(0); i++)
             {
-                for(int j = 0; j < tileCache.GetLength(1); j++)
+                for (int j = 0; j < tileCache.GetLength(1); j++)
                 {
                     newTileCache[xoff + i, yoff + j] = tileCache[i, j];
                     newEntityCache[xoff + i, yoff + j] = entityCache[i, j];
@@ -396,7 +397,7 @@ namespace CelesteBot_2023
 
             for (int i = 0; i < tileCache.GetLength(0) && shiftx + i < tileCache.GetLength(0); i++)
             {
-                if(shiftx + i < 0)
+                if (shiftx + i < 0)
                 {
                     continue;
                 }

@@ -1,9 +1,6 @@
 ﻿using Celeste.Mod;
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CelesteBot_2023
 {
@@ -44,7 +41,8 @@ namespace CelesteBot_2023
                     }
                 }
                 return true;
-            } catch (IndexOutOfRangeException e)
+            }
+            catch (IndexOutOfRangeException e)
             {
                 Logger.Log(CelesteBotInteropModule.ModLogKey, "THIS SHOULD NEVER HAPPEN!");
                 // Oh well...

@@ -1,10 +1,5 @@
-﻿using Celeste.Mod;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CelesteBot_2023
 {
@@ -26,7 +21,7 @@ namespace CelesteBot_2023
         public double GrabValue;
         public double LongJumpValue;
 
-        
+
         ///<summary>
         ///This constructor uses the actions float array to create virtual inputs from the actions.
         ///Refrenced from CelesteBotPlayer

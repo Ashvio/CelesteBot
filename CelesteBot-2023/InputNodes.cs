@@ -1,10 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
 using Monocle;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 namespace CelesteBot_2023
 {
     public class InputNodes
@@ -46,7 +41,7 @@ namespace CelesteBot_2023
             }
             public override Vector2 Value => Player.Data.MountainAim;
         }
-        
+
         public class Button : VirtualButton.Node
         {
             public InputPlayer Player;
@@ -54,7 +49,7 @@ namespace CelesteBot_2023
             public Button(InputPlayer player, InputData.ButtonMask mask)
             {
                 Player = player;
-                Mask = (int) mask;
+                Mask = (int)mask;
             }
             public override bool Check => !MInput.Disabled && (Player.Data.Buttons & Mask) == Mask;
             public override bool Pressed => !MInput.Disabled && (Player.Data.Buttons & Mask) == Mask && (Player.LastData.Buttons & Mask) == 0;

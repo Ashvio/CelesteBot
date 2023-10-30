@@ -1,21 +1,9 @@
 ﻿using Celeste.Mod;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
-using Mono.Cecil;
-using Mono.Cecil.Cil;
 using Monocle;
-using MonoMod;
-using MonoMod.RuntimeDetour;
-using MonoMod.Utils;
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 using Logger = Celeste.Mod.Logger;
 /*
 This is the CelesteBotInteropModule class located in the CelesteBotInteropModule.cs file. It is a module that allows 
@@ -43,7 +31,7 @@ namespace CelesteBot_2023
         public static string ModLogKey = "celeste-bot";
 
         public static ExternalActionManager ActionManager = new ExternalActionManager();
-        public static ExternalObservationManager ObservationManager = new ExternalObservationManager();
+        public static ExternalGameStateManager ObservationManager = new ExternalGameStateManager();
 
         public static CelestePlayer CurrentPlayer;
 
@@ -56,6 +44,9 @@ namespace CelesteBot_2023
         public static bool DrawGraph { get { return !ShowNothing && Settings.ShowGraph; } set { } }
         public static bool DrawTarget { get { return !ShowNothing && Settings.ShowTarget; } set { } }
         public static bool DrawRewardGraph { get { return !ShowNothing && Settings.ShowRewardGraph && LearningStyle == LearningStyle.Q; } set { } }
+
+        public static int FrameCounter { get; private set; }
+
         public static bool FitnessAppendMode = false;
         public static bool ShowNothing = false;
 
@@ -73,7 +64,7 @@ namespace CelesteBot_2023
 
         public static CelestePlayer SpeciesChamp;
         public static CelestePlayer GenPlayerTemp;
-        
+
         private static int TalkCount = 0; // Counts how many times we attempted to talk to something
         private static int TalkMaxAttempts = 30; // How many attempts until we give up attempting to talk to something
         private static int MaxTimeSinceLastTalk = 100; // Number of skipped frames when we can talk if we have recently talked to something
@@ -157,18 +148,25 @@ namespace CelesteBot_2023
             buffer = CelesteBotManager.PLAYER_GRACE_BUFFER; // sets the buffer to desired wait time... magic
             inputPlayer.UpdateData(temp);
         }
-        
+
         public static void MInput_Update(On.Monocle.MInput.orig_Update original)
-        {   
+        {
             // Comment this function  
             if (!Settings.Enabled)
             {
                 original();
                 return;
             }
+            FrameCounter++;
+            
             try
             {
                 Celeste.Player player = Celeste.Celeste.Scene.Tracker.GetEntity<Celeste.Player>();
+                if (player == null)
+                {
+                    original();
+                    return;
+                }
                 if (Celeste.TalkComponent.PlayerOver != null && TalkCount < TalkMaxAttempts && TimeSinceLastTalk >= MaxTimeSinceLastTalk)
                 {
                     if (inputPlayer.LastData.Talk)
@@ -184,7 +182,8 @@ namespace CelesteBot_2023
                     TalkCount++;
                     TimeSinceLastTalk = 0;
                     return;
-                } if (Celeste.TalkComponent.PlayerOver == null)
+                }
+                if (Celeste.TalkComponent.PlayerOver == null)
                 {
                     TimeSinceLastTalk = MaxTimeSinceLastTalk;
                     TalkCount = 0;
@@ -205,7 +204,8 @@ namespace CelesteBot_2023
                     return;
                 }
 
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 // level doesn't exist yet
                 if (ex is NullReferenceException || ex is InvalidCastException)
@@ -213,7 +213,7 @@ namespace CelesteBot_2023
                     original();
                     AIEnabled = false;
                     return;
-                } 
+                }
                 else
                 {
                     throw;
@@ -236,24 +236,38 @@ namespace CelesteBot_2023
                 Logger.Log(ModLogKey, "Completing a Cutscene Skip!");
                 return;
             }
-            
+            // for now, only do 4  calculations a second
+            if (FrameCounter % 15 == 0)
+            {
+                CelesteBotManager.Log("Calculating action");
+                FrameCounter = 0;
+                CurrentPlayer.Update();
+                CelesteBotManager.Log("Player retrieved");
 
-            kbState = Keyboard.GetState();
-            Action nextAction = ActionManager.GetNextAction();
-            InputData nextInput = new InputData(nextAction);
-            bool handled = HandleKB(nextInput);
-            if (handled)
+                Action nextAction = ActionManager.GetNextAction();
+                CelesteBotManager.Log("Action retrieved");
+                InputData nextInput = new InputData(nextAction);
+                bool handled = HandleKB(nextInput);
+                if (handled)
+                {
+                    original();
+                    return;
+                }
+
+                inputPlayer.UpdateData(nextInput);
+
+                original();
+            }
+            else
             {
                 original();
-                return;
+
             }
 
-            inputPlayer.UpdateData(nextInput);
-
-            original();
         }
         static bool HandleKB(InputData nextInput)
         {
+            kbState = Keyboard.GetState();
             if (IsKeyDown(Keys.A))
             {
                 FitnessAppendMode = !FitnessAppendMode;
@@ -357,7 +371,7 @@ namespace CelesteBot_2023
             //{
             //    // Player has not been setup yet
             //}
-            
+
             for (int i = 0; i < FrameLoops; i++)
             {
                 original(self, gameTime);

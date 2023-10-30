@@ -1,12 +1,8 @@
-﻿using Celeste.Mod;
-using Python.Runtime;
+﻿using Python.Runtime;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
+using System.Runtime.InteropServices;
 using System.Threading;
-using System.Threading.Tasks;
 
 namespace CelesteBot_2023
 {
@@ -33,7 +29,7 @@ namespace CelesteBot_2023
         {
             // Configure PythonNET interoperability using a python virtual env.
             // Store your Python DLL as an environment variable "PYTHONNET_PYDLL" before running.
-            CelesteBotManager.Log( "PYTHON Initializing");
+            CelesteBotManager.Log("PYTHON Initializing");
             PythonEngine.Initialize();
             PythonEngine.BeginAllowThreads();
             using (Py.GIL())
@@ -48,8 +44,12 @@ namespace CelesteBot_2023
                 dynamic python_celeste_client = rl_client.CelesteClient(py_queue);
                 Thread ActionConsumerThread = new Thread(() => ActionQueueConsumer(py_queue));
                 ActionConsumerThread.Start();
-                Thread TestThread = new Thread(() => Test(python_celeste_client));
-                TestThread.Start();
+                Thread ObservationProducerThread = new Thread(() => ObservationQueueProducer(python_celeste_client)); ;
+                ObservationProducerThread.Start();
+                Thread TrainingLoop = new Thread(() => RunTrainingLoop(python_celeste_client)); ;
+                TrainingLoop.Start();
+                //Thread TestThread = new Thread(() => Test(python_celeste_client));
+                //TestThread.Start();
                 // Create two tasks: one for adding items, one for testing python
                 //Task producer = Task.Factory.StartNew(() => AddItems(queue));
                 //Task tester = Task.Factory.StartNew(() => Test(python_celeste_client));
@@ -70,6 +70,10 @@ namespace CelesteBot_2023
                 //Logger.Log(CelesteBotInteropModule.ModLogKey, result);
             }
         }
+        static void RunTrainingLoop(dynamic py_celeste_client)
+        {
+            py_celeste_client.start_training();
+        }
         // This method adds items to the queue by calling a Python function
         static void ActionQueueConsumer(dynamic py_action_queue)
         {
@@ -79,7 +83,7 @@ namespace CelesteBot_2023
             // Loop through the Python queue and add each item to the BlockingCollection
             while (true)
             {
-                CelesteBotManager.Log("Attempting queue get");
+                //CelesteBotManager.Log("Attempting queue get");
                 // Get an item from the Python queue
                 int[] actions = (int[])py_action_queue.get();
 
@@ -87,6 +91,26 @@ namespace CelesteBot_2023
                 CelesteBotInteropModule.ActionManager.PythonAddAction(actions);
 
             }
+
+        }
+        static PyList ToPyList(int[] ints)
+        {
+            PyList list = new PyList();
+            foreach (int i in ints)
+            {
+                list.Append(new PyInt(i));
+            }
+            return list;
+        }
+        static PyList ToPyList(float[] floats)
+        {
+            PyList list = new PyList();
+            foreach (float f in floats)
+            {
+                list.Append(new PyFloat(f));
+                  
+            }
+            return list;
 
         }
         static void ObservationQueueProducer(dynamic python_celeste_client)
@@ -99,12 +123,25 @@ namespace CelesteBot_2023
             {
                 //CelesteBotManager.Log("Attempting Observation queue get");
                 // Convert it to a C# Item object
-                Observation obs = CelesteBotInteropModule.ObservationManager.PythonGetNextObservation();
-                PyObject vision = obs.Vision.ToPython();
+                GameState obs = CelesteBotInteropModule.ObservationManager.PythonGetNextObservation();
+                PyList vision = new PyList();
+
+                for (int i = 0; i < CelesteBotManager.VISION_2D_X_SIZE; i++)
+                {
+                    PyList sublist = new PyList();
+                    for (int j = 0; j < CelesteBotManager.VISION_2D_Y_SIZE; j++)
+                    {
+                        sublist.Append(new PyInt(obs.Vision[j][i]));
+                    }
+                    vision.Append(sublist); 
+                }
                 PyObject stamina = obs.Stamina.ToPython();
-                PyObject speed = obs.Speed.ToPython();
+                PyList speed = ToPyList(obs.Speed);
                 PyObject canDash = obs.CanDash.ToPython();
-                python_celeste_client.ext_add_observation(vision, speed, canDash, stamina );
+                PyObject reward = obs.Reward.ToPython();
+                PyObject deathFlag = obs.DeathFlag.ToPython();
+
+                python_celeste_client.ext_add_observation(vision, speed, canDash, stamina, reward, deathFlag);
             }
 
         }

@@ -1,44 +1,49 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Concurrent;
 
 namespace CelesteBot_2023
 {
-    public class Observation
+    public class GameState
     {
-        int[][] Vision;
-        int[] Speed;
-        float Stamina;
-        float CanDash;
-        public Observation(int[][] vision, float speedX, float speedY, float stamina, bool canDash) {
+        public int[][] Vision { get; }
+        public double Reward { get; }
+        public bool DeathFlag { get; }
+        public int[] Speed { get; }
+        public float Stamina { get; }
+        public float CanDash { get; }
+        public GameState(int[][] vision, float speedX, float speedY, float stamina, bool canDash, double reward, bool deathFlag)
+        {
+            // Observation
             Vision = vision;
             Speed = new int[] { (int)speedX, (int)speedY };
-            Stamina = CelesteBotManager.Normalize(stamina, -1, 120) ;
+            Stamina = CelesteBotManager.Normalize(stamina, -1, 120);
             CanDash = canDash ? 1 : 0;
+            // Reward
+            Reward = reward;
+            DeathFlag = deathFlag;
+            // Death
+
         }
+
     }
-    public class ExternalObservationManager
+    public class ExternalGameStateManager
     {
-        BlockingCollection<Observation> ObservationQueue;
+        BlockingCollection<GameState> GameStateQueue;
 
-        public ExternalObservationManager()
+        public ExternalGameStateManager()
         {
-            ObservationQueue = new BlockingCollection<Observation>();
+            GameStateQueue = new BlockingCollection<GameState>();
         }
 
-        public void AddObservation(Observation obs)
+        public void AddObservation(GameState obs)
         {
-            ObservationQueue.Add(obs);
+            GameStateQueue.Add(obs);
             CelesteBotManager.Log("Added Observation to queue");
 
         }
 
-        public Observation PythonGetNextObservation()
+        public GameState PythonGetNextObservation()
         {
-            return ObservationQueue.Take();
+            return GameStateQueue.Take();
         }
     }
 }

@@ -1,9 +1,4 @@
 ﻿using Celeste.Mod;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CelesteBot_2023
 {
@@ -25,7 +20,7 @@ namespace CelesteBot_2023
         public int OrganismsPerGeneration { get; set; } = 30;
         [SettingRange(1, 10), SettingNeedsRelaunch()]
         public int WeightMaximum { get; set; } = 5;
-        [SettingRange(2,50)]
+        [SettingRange(2, 50)]
         public int UpdateTargetThreshold { get; set; } = 8;
         [SettingRange(0, 20)]
         public int TargetReachedRewardFitness { get; set; } = 2;

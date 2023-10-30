@@ -3,10 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CelesteBot_2023
 {
@@ -62,7 +58,8 @@ namespace CelesteBot_2023
                 double[] temp = new double[actions];
                 temp[actionIndexTaken] = value;
                 dynamicTable.Add(state, temp);
-            } else
+            }
+            else
             {
                 throw new Exception("Need to create the QTable before adding states to it!");
             }
@@ -84,7 +81,8 @@ namespace CelesteBot_2023
                     temp[actionIndexTaken] = value;
                     Logger.Log(CelesteBotInteropModule.ModLogKey, "State already exists!");
                     dynamicTable[s] = temp;
-                } else
+                }
+                else
                 {
                     Logger.Log(CelesteBotInteropModule.ModLogKey, "New State Added!");
                     Add(state, actionIndexTaken, value);
@@ -150,7 +148,8 @@ namespace CelesteBot_2023
                     return 0;
                 }
                 return dynamicTable[s].Max();
-            } else
+            }
+            else
             {
                 throw new Exception("Need to create the QTable before getting the max of states within it!");
             }
@@ -212,7 +211,7 @@ namespace CelesteBot_2023
             actionIndexList = new List<InputData>();
             float[] tempActionArr = new float[CelesteBotManager.OUTPUTS];
 
-         //   CalculatePossibleActions(tempActionArr);
+            //   CalculatePossibleActions(tempActionArr);
         }
         public static InputData GetRandomAction()
         {
@@ -256,7 +255,7 @@ namespace CelesteBot_2023
         }
         public static void SerializeTable(QTable table, string fileName)
         {
-            
+
         }
         public static QTable SerializeLoad(string fileName)
         {
@@ -266,7 +265,7 @@ namespace CelesteBot_2023
 
             try
             {
-                
+
             }
             catch (Exception ex)
             {
@@ -294,7 +293,8 @@ namespace CelesteBot_2023
                     s.Add(z);
                 }
                 File.WriteAllLines(fileName, s.ToArray());
-            } catch (Exception ex)
+            }
+            catch (Exception ex)
             {
                 Logger.Log(CelesteBotInteropModule.ModLogKey, "An exception happened when attempting to save the QTable!");
                 Logger.Log(CelesteBotInteropModule.ModLogKey, ex.Message);
@@ -340,4 +340,3 @@ namespace CelesteBot_2023
         }
     }
 }
- 

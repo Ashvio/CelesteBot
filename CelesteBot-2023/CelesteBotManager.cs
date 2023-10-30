@@ -5,14 +5,7 @@ using Monocle;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using Python;
-using Python.Runtime;
-using System.IO;
-using System.Reflection;
 using System.Threading;
-using System.Collections.Concurrent;
-using System.Threading.Tasks;
-using System.Dynamic;
 /*
 * The selected code block belongs to the CelesteBotManager class and is found in the CelesteBotManager.cs file.
 This class contains various member variables that hold the configurations for the program as well as some utility 
@@ -38,7 +31,7 @@ namespace CelesteBot_2023
         public static double ADD_NODE_CHANCE = 0.15f; // The chance for a new node to be added
 
         public static double WEIGHT_MAXIMUM = 3; // Max magnitude a weight can be (+- this number)
-        
+
         public static int VISION_2D_X_SIZE = 10; // X Size of the Vision array
         public static int VISION_2D_Y_SIZE = 10; // Y Size of the Vision array
         public static int TILE_2D_X_CACHE_SIZE = 1000;
@@ -117,14 +110,6 @@ namespace CelesteBot_2023
             Logger.Log(CelesteBotInteropModule.ModLogKey, message);
         }
 
-
-
-       
-
-    private static void InitializePythonNET()
-        {
-           
-        }
         public static void Initialize()
         {
             Logger.SetLogLevel(CelesteBotInteropModule.ModLogKey, LogLevel.Verbose);
@@ -173,7 +158,7 @@ namespace CelesteBot_2023
             int viewHeight = Engine.ViewHeight;
 
             Monocle.Draw.SpriteBatch.Begin();
-           
+
             Monocle.Draw.SpriteBatch.End();
         }
         // WHAT IF: I ONLY UPDATE PREVIOUS STATES' QTABLE DATA
@@ -199,7 +184,7 @@ namespace CelesteBot_2023
                 // Just make sure we are playing again!
                 return false;
             }
-            Logger.Log(CelesteBotInteropModule.ModLogKey, "Completing Cutscene Skip with inputs: " + thisFrame + " and Cutscene: "+Cutscene);
+            Logger.Log(CelesteBotInteropModule.ModLogKey, "Completing Cutscene Skip with inputs: " + thisFrame + " and Cutscene: " + Cutscene);
             inputPlayer.UpdateData(thisFrame);
             return true;
         }
@@ -221,18 +206,20 @@ namespace CelesteBot_2023
 
                     if (level.InCutscene)
                     {
-                        Logger.Log(CelesteBotInteropModule.ModLogKey, "Entered Cutscene! With Cutscene: "+Cutscene);
+                        Logger.Log(CelesteBotInteropModule.ModLogKey, "Entered Cutscene! With Cutscene: " + Cutscene);
                         Cutscene = true;
                         InputData newFrame = new InputData();
                         newFrame.ESC = true;
                         inputPlayer.UpdateData(newFrame);
                         return true;
                     }
-                } catch (InvalidCastException e)
+                }
+                catch (InvalidCastException e)
                 {
                     // Game still hasn't finished loading...
                 }
-            } catch (NullReferenceException e)
+            }
+            catch (NullReferenceException e)
             {
                 // Level or Player hasn't been setup yet. Just continue on for now.
             }
@@ -252,7 +239,7 @@ namespace CelesteBot_2023
 
         public static float Normalize(float value, float min, float max)
         {
-            return (value - (max - min)/2) / ((max - min) / 2);
+            return (value - (max - min) / 2) / ((max - min) / 2);
         }
         public static void DrawPlayer(CelestePlayer p)
         {
@@ -261,12 +248,12 @@ namespace CelesteBot_2023
 
         public static void DrawGraph()
         {
-          
+
         }
 
         public static void DrawRewardGraph()
         {
-            
+
         }
 
         public static void DrawFitnessTarget(CelestePlayer player)
@@ -321,16 +308,16 @@ namespace CelesteBot_2023
 
         public static void DrawStandard(CelestePlayer p)
         {
-            
+
         }
         public static void DrawDetails(CelestePlayer p)
         {
             Monocle.Draw.Rect(0f, 90f, 600f, 30f, Color.Black * 0.8f);
-            ActiveFont.Draw("(X: " + p.player.BottomCenter.X + ", Y: " + p.player.BottomCenter.Y + "), (Vx: " + p.player.Speed.X + ", Vy: " + p.player.Speed.Y + "), Dashes: " + p.player.Dashes + ", Stamina: " + p.player.Stamina, new Vector2(3,90), Vector2.Zero, new Vector2(0.4f, 0.4f), Color.White);
+            ActiveFont.Draw("(X: " + p.player.BottomCenter.X + ", Y: " + p.player.BottomCenter.Y + "), (Vx: " + p.player.Speed.X + ", Vy: " + p.player.Speed.Y + "), Dashes: " + p.player.Dashes + ", Stamina: " + p.player.Stamina, new Vector2(3, 90), Vector2.Zero, new Vector2(0.4f, 0.4f), Color.White);
         }
         public static void DrawBestFitness()
         {
-          
+
         }
         public static void DrawAppendMode()
         {
@@ -340,7 +327,7 @@ namespace CelesteBot_2023
                 Level level = (Level)Celeste.Celeste.Scene;
 
                 Monocle.Draw.Rect(0f, 60f, 600f, 30f, Color.Black * 0.8f);
-                ActiveFont.Draw(level.Session.MapData.Filename + "_"+ level.Session.Level + ": [" + player.BottomCenter.X + ", " + player.BottomCenter.Y + ", " + player.Speed.X + ", " + player.Speed.Y + "]", new Vector2(3, 60), Vector2.Zero, new Vector2(0.45f, 0.45f), Color.White);
+                ActiveFont.Draw(level.Session.MapData.Filename + "_" + level.Session.Level + ": [" + player.BottomCenter.X + ", " + player.BottomCenter.Y + ", " + player.Speed.X + ", " + player.Speed.Y + "]", new Vector2(3, 60), Vector2.Zero, new Vector2(0.45f, 0.45f), Color.White);
             }
             catch (Exception e)
             {

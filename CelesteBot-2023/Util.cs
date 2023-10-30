@@ -1,16 +1,6 @@
-﻿using Celeste.Mod;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Runtime.Serialization;
-using System.Runtime.Serialization.Formatters.Binary;
-using System.Text;
-using System.Threading.Tasks;
-using System.Xml;
-using System.Xml.Serialization;
-using System.Runtime.Serialization.Json;
 
 namespace CelesteBot_2023
 {
@@ -19,7 +9,7 @@ namespace CelesteBot_2023
         private static Dictionary<string, List<Vector2>> positionalFitnesses;
         private static Dictionary<string, List<Vector2>> velocityFitnesses;
         private static List<string> rawLevels;
-        
+
         public static IEnumerable<T> SliceRow<T>(T[,] array, int row)
         {
             for (var i = 0; i < array.GetLength(0); i++)
@@ -59,7 +49,8 @@ namespace CelesteBot_2023
                         // (shift-space?): Will cross the room again (need to keep track of rooms that we will cross many times)
                         // (space): Will only enter-exit the room once
                         // The data that this dictionary contains should now be objects instead of vector2 lists... they need to contains lots of info, so lets set that up too.
-                    } else
+                    }
+                    else
                     {
                         positionalFitnesses.Add(name, new List<Vector2>());
                         velocityFitnesses.Add(name, new List<Vector2>());

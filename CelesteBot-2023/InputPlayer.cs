@@ -2,10 +2,6 @@
 using Celeste.Mod;
 using Microsoft.Xna.Framework;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace CelesteBot_2023
 {
@@ -77,17 +73,15 @@ namespace CelesteBot_2023
         public override void Update(GameTime gameTime)
         {
             base.Update(gameTime);
-            try
-            {
-                Player p = Celeste.Celeste.Scene.Tracker.GetEntity<Player>();
-                if (p.Dead || p == null) // Not sure if this works if quickRestarting
-                {
-                    Logger.Log(CelesteBotInteropModule.ModLogKey, "Player is either null or dead, but NOT removing!");
-                }
-            } catch (NullReferenceException e)
-            {
+  
+                //Player p = Celeste.Celeste.Scene.Tracker.GetEntity<Player>();
+                //if (p == null || p.Dead ) // Not sure if this works if quickRestarting
+                //{
+                //    Logger.Log(CelesteBotInteropModule.ModLogKey, "Player is either null or dead, but NOT removing!");
+                //}
+            
                 // Game has yet to load, wait a bit. The Celeste.Celeste.Scene does not exist.
-            }
+            
         }
         public void Remove()
         {

@@ -1,15 +1,10 @@
 ﻿using Celeste;
 using Celeste.Mod;
 using Microsoft.Xna.Framework;
-using Monocle;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Runtime.Serialization;
 /*
 * The CelestePlayer class represents the player in the game and is located in the same file as the CelesteBotInteropModule. 
 * It contains a Brain property which represents its neural network, a Fitness property to keep track of its performance in
@@ -24,9 +19,9 @@ namespace CelesteBot_2023
     public class CelestePlayer : IDisposable
     {
         int[][] Vision2D = new int[CelesteBotManager.VISION_2D_X_SIZE][];
-        
+
         public Player player;
-        Vector2 startPos = new Vector2(0,0);
+        Vector2 startPos = new Vector2(0, 0);
 
         public float Fitness = -1;
         public double LastPlayerPosition = 0;
@@ -58,6 +53,8 @@ namespace CelesteBot_2023
         public bool VisionSetup = false;
         public List<double> Rewards;
 
+        public bool DeathFlag { get; private set; }
+
         public CelestePlayer()
         {
             for (int i = 0; i < CelesteBotManager.VISION_2D_X_SIZE; i++)
@@ -85,7 +82,8 @@ namespace CelesteBot_2023
                     {
                         startPos = player.BottomCenter;
                     }
-                } catch (NullReferenceException e)
+                }
+                catch (NullReferenceException e)
                 {
                     Logger.Log(CelesteBotInteropModule.ModLogKey, "Player has not been created yet, or is null for some other reason.");
                     return;
@@ -105,13 +103,16 @@ namespace CelesteBot_2023
                 //return;
             }
             UpdateVision();
+            CelesteBotManager.Log("Visions calculated");
+
+            CalculateGameState();
+            CelesteBotManager.Log("Game state calculated");
             //Look();
             //Think();
             if (!Replay)
             {
                 UpdateTarget();
             }
-            double reward = CalculateReward();
             /*need to incorporate y here, maybe dist to goal here as well*/
             // Compare to distance to fitness target
             if (player.Speed.Length() == 0 || (player.BottomCenter - Target).Length() >= (MaxPlayerPos - Target).Length() && !player.JustRespawned)
@@ -120,11 +121,12 @@ namespace CelesteBot_2023
                 {
                     timer.Start();
                 }
-            } else
+            }
+            else
             {
                 timer.Reset(); // Resets TimeWhileStuck if it starts moving again!
             }
-            if (timer.ElapsedMilliseconds * CelesteBotInteropModule.FrameLoops > CelesteBotInteropModule.Settings.TimeStuckThreshold * 1000 && !player.Dead && !deathTimer.IsRunning)
+            if (timer.ElapsedMilliseconds * CelesteBotInteropModule.FrameLoops > CelesteBotInteropModule.Settings.TimeStuckThreshold * 100000 && !player.Dead && !deathTimer.IsRunning)
             {
                 // Kill the player because it hasn't moved for awhile
                 Dead = true;
@@ -147,7 +149,8 @@ namespace CelesteBot_2023
             {
                 //TileFinder.TilesOffset = Celeste.Celeste.Scene.Entities.FindFirst<SolidTiles>().Center; // Thanks KDT#7539!
                 TileFinder.SetupOffset();
-            } catch (NullReferenceException e)
+            }
+            catch (NullReferenceException e)
             {
                 // The Scene hasn't been created yet.
             }
@@ -164,7 +167,8 @@ namespace CelesteBot_2023
             try
             {
                 Level level = (Level)Celeste.Celeste.Scene;
-            } catch (InvalidCastException e)
+            }
+            catch (InvalidCastException e)
             {
                 // This means we tried to cast a LevelExit to a Level. It basically means we are dead.
                 //Dead = true;
@@ -172,7 +176,7 @@ namespace CelesteBot_2023
                 return;
             }
 
-            Vector2 tileUnder = TileFinder.GetTileXY(new Vector2(player.X, player.Y+4));
+            Vector2 tileUnder = TileFinder.GetTileXY(new Vector2(player.X, player.Y + 4));
             //Logger.Log(CelesteBotInteropModule.ModLogKey, "Tile Under Player: (" + tileUnder.X + ", " + tileUnder.Y + ")");
             //Logger.Log(CelesteBotInteropModule.ModLogKey, "(X,Y) Under Player: (" + player.X + ", " + (player.Y + 4) + ")");
             // 1 = Air, 2 = Wall, 4 = Entity
@@ -214,12 +218,15 @@ namespace CelesteBot_2023
         //{
 
         //}
-        void Look()
+        void CalculateGameState()
         {
-            if (player == null)
+            if (player == null && DeathFlag)
             {
                 // We are waiting for the death timer to expire
                 return;
+            } else if (player == null && !DeathFlag)
+            {
+                DeathFlag = true;
             }
             // Updates vision array with proper values each frame
             /*
@@ -228,15 +235,11 @@ namespace CelesteBot_2023
             Outputs: U, D, L, R, Jump, Dash, Climb
             If any of the outputs are above 0.7, apply them when returning controller output
             */
-            Observation CurrentGameState = new Observation(Vision2D, player.Speed.X, player.Speed.Y, player.Stamina, player.CanDash);
+            double reward = CalculateReward();
+
+            GameState CurrentGameState = new GameState(Vision2D, player.Speed.X, player.Speed.Y, player.Stamina, player.CanDash, reward, DeathFlag);
             CelesteBotInteropModule.ObservationManager.AddObservation(CurrentGameState);
-            //for (int i = 0; i < CelesteBotManager.VISION_2D_X_SIZE; i++)
-            //{
-            //    for (int j = 0; j < CelesteBotManager.VISION_2D_Y_SIZE; j++)
-            //    {
-            //        Vision[i * CelesteBotManager.VISION_2D_Y_SIZE + j] = Vision2D[j][i];
-            //    }
-            //}
+
             //Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE] = player.BottomCenter.X;
             //Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 1] = player.BottomCenter.Y;
             //Vision[CelesteBotManager.VISION_2D_Y_SIZE * CelesteBotManager.VISION_2D_X_SIZE + 2] = player.Speed.X;
@@ -278,7 +281,7 @@ namespace CelesteBot_2023
             }
             double reward = -(quasiFitness - LastPlayerPosition) / (1.0 / 60.0) * 10;
             LastPlayerPosition = quasiFitness;
-            
+
             // Maybe change reward to be dFitness/dt?
             return reward;
         }
@@ -314,7 +317,8 @@ namespace CelesteBot_2023
                     enumForFitness.MoveNext();
                     Target = enumForFitness.Current;
                     Logger.Log(CelesteBotInteropModule.ModLogKey, "Key: " + enumForLevels.Current + "==" + level.Session.MapData.Filename + "_" + level.Session.Level + "_" + "0" + " out: " + Target.ToString());
-                } catch (KeyNotFoundException e)
+                }
+                catch (KeyNotFoundException)
                 {
                     // In a level that doesn't have a valid fitness enumerator
                     Target = new Vector2(10000, -10000);
@@ -366,7 +370,8 @@ namespace CelesteBot_2023
         // Getter method for fitness (rarely used)
         public float GetFitness()
         {
-            if (!Replay) {
+            if (!Replay)
+            {
                 CalculateFitness();
             }
             return Fitness;
