@@ -22,17 +22,20 @@ You may connect more than one policy client to any open listen port.
 """
 
 import argparse
+import logging
 import os
 
 import ray
+from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.env.policy_server_input import PolicyServerInput
+from ray.rllib.evaluation.collectors.sample_collector import SampleCollector
 from ray.rllib.examples.custom_metrics_and_callbacks import MyCallbacks
 from ray.tune.logger import pretty_print
 from ray.tune.registry import get_trainable_cls
 
 from python_rl.rl_common.celestebot_env import CelesteEnv
 
-SERVER_ADDRESS = "localhost"
+SERVER_ADDRESS = "127.0.0.1"
 # In this example, the user can run the policy server with
 # n workers, opening up listen ports 9900 - 990n (n = num_workers - 1)
 # to each of which different clients may connect.
@@ -56,20 +59,20 @@ def get_cli_args():
         "--callbacks-verbose",
         action="store_true",
         help="Activates info-messages for different events on "
-        "server/client (episode steps, postprocessing, etc..).",
+             "server/client (episode steps, postprocessing, etc..).",
     )
     parser.add_argument(
         "--num-workers",
         type=int,
         default=1,
         help="The number of workers to use. Each worker will create "
-        "its own listening socket for incoming experiences.",
+             "its own listening socket for incoming experiences.",
     )
     parser.add_argument(
         "--no-restore",
         action="store_true",
         help="Do not restore from a previously saved checkpoint (location of "
-        "which is saved in `last_checkpoint_[algo-name].out`).",
+             "which is saved in `last_checkpoint_[algo-name].out`).",
     )
 
     # General args.
@@ -124,6 +127,7 @@ if __name__ == "__main__":
     args = get_cli_args()
     ray.init()
 
+
     # `InputReader` generator (returns None if no input reader is needed on
     # the respective worker).
     def _input(ioctx):
@@ -134,16 +138,19 @@ if __name__ == "__main__":
                 ioctx,
                 SERVER_ADDRESS,
                 args.port + ioctx.worker_index - (1 if ioctx.worker_index > 0 else 0),
+                idle_timeout=0.025
             )
         # No InputReader (PolicyServerInput) needed.
         else:
             return None
+
+
     env = CelesteEnv(None)
 
     # Algorithm config. Note that this config is sent to the client only in case
     # the client needs to create its own policy copy for local inference.
     config = (
-        get_trainable_cls("PPO").get_default_config()
+        PPOConfig()
         # Indicate that the Algorithm we setup here doesn't need an actual env.
         # Allow spaces to be determined by user (see below).
         .rl_module(_enable_rl_module_api=False)
@@ -155,18 +162,24 @@ if __name__ == "__main__":
             observation_space=env.observation_space,
             action_space=env.action_space,
         )
+        # .update_from_dict({"num_gpus_per_worker": 1})
         # DL framework to use.
         .framework("torch")
-
+        .resources(num_gpus=1, num_cpus_per_worker=2, )
+        # .num_gpus(1)
         # Create a "chatty" client/server or not.
-        .callbacks(MyCallbacks if args.callbacks_verbose else None)
+        # .callbacks(MyCallbacks if args.callbacks_verbose else None)
         # Use the `PolicyServerInput` to generate experiences.
-        .offline_data(input_=_input)
+        .offline_data(input_=_input, offline_sampling=False, shuffle_buffer_size=0)
         # Use n worker processes to listen on different ports.
         .rollouts(
-            num_rollout_workers=args.num_workers,
+            num_rollout_workers=2,
             # Connectors are not compatible with the external env.
             enable_connectors=False,
+            create_env_on_local_worker=True,
+            batch_mode="truncate_episodes",
+            rollout_fragment_length=1,
+            remote_env_batch_wait_ms=0,
         )
         # Disable OPE, since the rollouts are coming from online clients.
         .evaluation(off_policy_estimation_methods={})
@@ -174,19 +187,20 @@ if __name__ == "__main__":
         .debugging(log_level="INFO")
     )
 
-
     # Example of using PPO (does NOT support off-policy actions).
     config.update_from_dict(
         {
-            "rollout_fragment_length": 1000,
-            "train_batch_size": 4000,
-            "model": {"use_lstm": True},
+            "rollout_fragment_length": 100,
+            "train_batch_size": 400,
+            "model": {"use_lstm": False},
+            "count_steps_by": "env_steps"
         }
     )
 
     checkpoint_path = CHECKPOINT_FILE.format('PPO')
     # Attempt to restore from checkpoint, if possible.
     if not args.no_restore and os.path.exists(checkpoint_path):
+        logging.log(logging.INFO, "Restoring from checkpoint path " + checkpoint_path)
         checkpoint_path = open(checkpoint_path).read()
     else:
         checkpoint_path = None
@@ -195,23 +209,25 @@ if __name__ == "__main__":
     if True:
         algo = config.build()
 
+        logging.getLogger('requests').setLevel(logging.CRITICAL)
+        # TODO: Figure out why connections keep closing (HTTP BaseHandler is 1.0 not 1.1)
+        logging.getLogger('urllib3.connectionpool').setLevel(logging.CRITICAL)
+
         if checkpoint_path:
             print("Restoring from checkpoint path", checkpoint_path)
             algo.restore(checkpoint_path)
 
         # Serving and training loop.
         ts = 0
-        for _ in range(args.stop_iters):
+        for _ in range(100000):
             results = algo.train()
             print(pretty_print(results))
             checkpoint = algo.save().checkpoint
             print("Last checkpoint", checkpoint)
             with open(checkpoint_path, "w") as f:
+                logging.log(logging.INFO, "Saving checkpoint path " + checkpoint.path)
                 f.write(checkpoint.path)
-            if (
-                results["episode_reward_mean"] >= args.stop_reward
-                or ts >= args.stop_timesteps
-            ):
+            if ts >= args.stop_timesteps:
                 break
             ts += results["timesteps_total"]
 

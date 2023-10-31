@@ -1,9 +1,11 @@
-﻿using Microsoft.Xna.Framework;
+﻿using Celeste.Mod;
+using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
 
 namespace CelesteBot_2023
 {
+
     public class Util
     {
         private static Dictionary<string, List<Vector2>> positionalFitnesses;
@@ -16,6 +18,10 @@ namespace CelesteBot_2023
             {
                 yield return array[i, row];
             }
+        }
+        public static double Normalize(double value, double min, double max)
+        {
+            return (value - (max - min) / 2) / ((max - min) / 2);
         }
         public static Dictionary<string, List<Vector2>> GetPositionFitnesses(string FitnessPath)
         {

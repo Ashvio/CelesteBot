@@ -31,7 +31,7 @@ namespace CelesteBot_2023
         public static string ModLogKey = "celeste-bot";
 
         public static ExternalActionManager ActionManager = new ExternalActionManager();
-        public static ExternalGameStateManager ObservationManager = new ExternalGameStateManager();
+        public static ExternalGameStateManager GameStateManager = new ExternalGameStateManager();
 
         public static CelestePlayer CurrentPlayer;
 
@@ -46,6 +46,7 @@ namespace CelesteBot_2023
         public static bool DrawRewardGraph { get { return !ShowNothing && Settings.ShowRewardGraph && LearningStyle == LearningStyle.Q; } set { } }
 
         public static int FrameCounter { get; private set; }
+        public static bool RunActionNextFrame { get; private set; }
 
         public static bool FitnessAppendMode = false;
         public static bool ShowNothing = false;
@@ -62,8 +63,6 @@ namespace CelesteBot_2023
         public static int UpToGen = 0;
         public static int FrameLoops = 1;
 
-        public static CelestePlayer SpeciesChamp;
-        public static CelestePlayer GenPlayerTemp;
 
         private static int TalkCount = 0; // Counts how many times we attempted to talk to something
         private static int TalkMaxAttempts = 30; // How many attempts until we give up attempting to talk to something
@@ -98,7 +97,7 @@ namespace CelesteBot_2023
         public override void Load()
         {
             On.Monocle.Engine.Draw += Engine_Draw;
-            //On.Monocle.Engine.Update += Engine_Update;
+            On.Monocle.Engine.Update += Engine_Update;
             On.Monocle.MInput.Update += MInput_Update;
             On.Celeste.Celeste.OnSceneTransition += OnScene_Transition;
 
@@ -108,7 +107,7 @@ namespace CelesteBot_2023
         {
             base.Initialize();
             CelesteBotManager.Initialize();
-
+            RunActionNextFrame = false;
             // Hey, InputPlayer should be made to work without removing self when players die
             inputPlayer = new InputPlayer(Celeste.Celeste.Instance, new InputData()); // Blank InputData when constructing. Overwrite it when needing to update inputs
             Celeste.Celeste.Instance.Components.Add(inputPlayer);
@@ -118,6 +117,7 @@ namespace CelesteBot_2023
 
             TalkMaxAttempts = Settings.MaxTalkAttempts;
             MaxTimeSinceLastTalk = Settings.TalkFrameBuffer;
+
         }
         //public static void GeneratePlayer()
         //{
@@ -157,11 +157,12 @@ namespace CelesteBot_2023
                 original();
                 return;
             }
-            FrameCounter++;
+            CurrentPlayer.Episode.IncrementFrames();
+            
             
             try
             {
-                Celeste.Player player = Celeste.Celeste.Scene.Tracker.GetEntity<Celeste.Player>();
+                Celeste.Player player = Engine.Scene.Tracker.GetEntity<Celeste.Player>();
                 if (player == null)
                 {
                     original();
@@ -236,33 +237,39 @@ namespace CelesteBot_2023
                 Logger.Log(ModLogKey, "Completing a Cutscene Skip!");
                 return;
             }
-            // for now, only do 4  calculations a second
-            if (FrameCounter % 15 == 0)
+            InputData nextInput = new InputData();
+            bool handled = HandleKB(nextInput);
+            if (handled)
+            {
+                original();
+                return;
+            }
+            if (RunActionNextFrame)
+            {
+                // We have an action waiting for us!
+                Action nextAction = ActionManager.GetNextAction();
+                nextInput.UpdateData(nextAction);
+                inputPlayer.UpdateData(nextInput);
+                RunActionNextFrame = false;
+            }
+            // for now, only do N  calculations a second
+            if (CurrentPlayer.Episode.IsCalculateFrame())
             {
                 CelesteBotManager.Log("Calculating action");
-                FrameCounter = 0;
                 CurrentPlayer.Update();
-                CelesteBotManager.Log("Player retrieved");
-
-                Action nextAction = ActionManager.GetNextAction();
-                CelesteBotManager.Log("Action retrieved");
-                InputData nextInput = new InputData(nextAction);
-                bool handled = HandleKB(nextInput);
-                if (handled)
+                if (CurrentPlayer.WaitingForRespawn) // If we are waiting for a respawn, just skip this frame
                 {
                     original();
                     return;
                 }
-
-                inputPlayer.UpdateData(nextInput);
+                // Give the API 1 frame to get the next action
+                RunActionNextFrame = true;
+                
+            }
 
                 original();
-            }
-            else
-            {
-                original();
 
-            }
+            
 
         }
         static bool HandleKB(InputData nextInput)
@@ -272,6 +279,14 @@ namespace CelesteBot_2023
             {
                 FitnessAppendMode = !FitnessAppendMode;
             }
+            if (IsKeyDown(Keys.F) && IsKeyDown(Keys.LeftShift))
+            {
+                FrameLoops = 1;
+            }
+            else if (IsKeyDown(Keys.F))
+            {
+                FrameLoops = CelesteBotManager.FAST_MODE_MULTIPLIER;
+            }
             if (FitnessAppendMode)
             {
                 if (IsKeyDown(Keys.Space) && timer <= 0)
@@ -280,8 +295,8 @@ namespace CelesteBot_2023
                     try
                     {
 
-                        Celeste.Player player = Celeste.Celeste.Scene.Tracker.GetEntity<Celeste.Player>();
-                        Celeste.Level level = (Celeste.Level)Celeste.Celeste.Scene;
+                        Celeste.Player player = Engine.Scene.Tracker.GetEntity<Celeste.Player>();
+                        Celeste.Level level = (Celeste.Level)Engine.Scene;
                         if (times.ContainsKey(level.Session.MapData.Filename + "_" + level.Session.Level))
                         {
                             if (IsKeyDown(Keys.LeftShift))
@@ -335,25 +350,18 @@ namespace CelesteBot_2023
             {
                 ShowNothing = true;
             }
-            else if (IsKeyDown(Keys.F) && IsKeyDown(Keys.LeftShift))
-            {
-                FrameLoops = 1;
-            }
-            else if (IsKeyDown(Keys.F))
-            {
-                FrameLoops = CelesteBotManager.FAST_MODE_MULTIPLIER;
-            }
-            if (state == State.Running)
-            {
-                if (buffer > 0)
-                {
-                    buffer--;
-                    //original();
-                    inputPlayer.UpdateData(nextInput);
-                    return true;
-                }
+            
+            //if (state == State.Running)
+            //{
+            //    if (buffer > 0)
+            //    {
+            //        buffer--;
+            //        //original();
+            //        inputPlayer.UpdateData(nextInput);
+            //        return true;
+            //    }
 
-            }
+            //}
             return false;
         }
         public static void Engine_Update(On.Monocle.Engine.orig_Update original, Engine self, GameTime gameTime)
@@ -371,13 +379,19 @@ namespace CelesteBot_2023
             //{
             //    // Player has not been setup yet
             //}
-
-            for (int i = 0; i < FrameLoops; i++)
+            if (FrameLoops > 1)
+            {
+                for (int i = 0; i < FrameLoops; i++)
+                {
+                    original(self, gameTime);
+                }
+            }
+            else
             {
                 original(self, gameTime);
             }
-        }
-        public static void OnScene_Transition(On.Celeste.Celeste.orig_OnSceneTransition original, Celeste.Celeste self, Scene last, Scene next)
+            }
+            public static void OnScene_Transition(On.Celeste.Celeste.orig_OnSceneTransition original, Celeste.Celeste self, Scene last, Scene next)
         {
             original(self, last, next);
             if (!CurrentPlayer.VisionSetup)

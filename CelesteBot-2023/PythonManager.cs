@@ -32,6 +32,9 @@ namespace CelesteBot_2023
             CelesteBotManager.Log("PYTHON Initializing");
             PythonEngine.Initialize();
             PythonEngine.BeginAllowThreads();
+            Thread ActionConsumerThread;
+            Thread ObservationProducerThread;
+            Thread TrainingLoop;
             using (Py.GIL())
             {
                 dynamic queue = Py.Import("queue"); // import the queue module
@@ -42,42 +45,42 @@ namespace CelesteBot_2023
                 dynamic py_queue = queue.Queue();
 
                 dynamic python_celeste_client = rl_client.CelesteClient(py_queue);
-                Thread ActionConsumerThread = new Thread(() => ActionQueueConsumer(py_queue));
-                ActionConsumerThread.Start();
-                Thread ObservationProducerThread = new Thread(() => ObservationQueueProducer(python_celeste_client)); ;
-                ObservationProducerThread.Start();
-                Thread TrainingLoop = new Thread(() => RunTrainingLoop(python_celeste_client)); ;
-                TrainingLoop.Start();
-                //Thread TestThread = new Thread(() => Test(python_celeste_client));
-                //TestThread.Start();
-                // Create two tasks: one for adding items, one for testing python
-                //Task producer = Task.Factory.StartNew(() => AddItems(queue));
-                //Task tester = Task.Factory.StartNew(() => Test(python_celeste_client));
-
-                // Wait for both tasks to complete
-                //Task.WaitAll(producer, tester);
-
-
-                //string pythonFile = @"rl_client\celestebot_client.py";
-
-                //var scope = Py.CreateScope();
-                //string code = File.ReadAllText(pythonFile);
-                //var scriptCompiled = PythonEngine.Compile(code, pythonFile); // Compile the code/file
-                //scope.Execute(scriptCompiled); // Execute the compiled python so we can start calling it.
-                //PyObject test = scope.Get("test"); // Lets get an instance of the class in python
-                //PyObject pythongReturn = test.Invoke(new PyString("PYTHON TEST sayHello")); // Call the sayHello function on the exampleclass object
-                //var result = pythongReturn.AsManagedObject(typeof(string)) as string;
-                //Logger.Log(CelesteBotInteropModule.ModLogKey, result);
+                ActionConsumerThread = new Thread(() => ActionQueueConsumer(py_queue));
+                ActionConsumerThread.Name = "ActionConsumer";
+                ObservationProducerThread = new Thread(() => ObservationQueueProducer(python_celeste_client));
+                ObservationProducerThread.Name = "ObservationProducer";
+                TrainingLoop = new Thread(() => RunTrainingLoop(python_celeste_client));
+                TrainingLoop.Name = "TrainingLoop";
+                CelestePlayer.Vision2D = new PyList();
+                for (int i = 0; i < CelesteBotManager.VISION_2D_X_SIZE; i++)
+                {
+                    PyList sublist = new PyList();
+                    for (int j = 0; j < CelesteBotManager.VISION_2D_Y_SIZE; j++)
+                    {
+                        sublist.Append(new PyInt((int)0));
+                    }
+                    CelestePlayer.Vision2D.Append(sublist);
+                }
             }
+            ActionConsumerThread.Start();
+            ObservationProducerThread.Start();
+            TrainingLoop.Start();
+            CelesteBotManager.Log("Python Finished Initializing");
+
         }
         static void RunTrainingLoop(dynamic py_celeste_client)
         {
+            CelesteBotManager.Log("Py Training Loop Initializing");
+
+
             py_celeste_client.start_training();
+
         }
         // This method adds items to the queue by calling a Python function
         static void ActionQueueConsumer(dynamic py_action_queue)
         {
             // Consumes Actions sent from Python client
+            CelesteBotManager.Log("Py Action consumer Loop Initializing");
 
 
             // Loop through the Python queue and add each item to the BlockingCollection
@@ -85,13 +88,56 @@ namespace CelesteBot_2023
             {
                 //CelesteBotManager.Log("Attempting queue get");
                 // Get an item from the Python queue
-                int[] actions = (int[])py_action_queue.get();
+                int[] actions;
+
+                dynamic output = py_action_queue.get();
+                long millis = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+                CelesteBotManager.Log($"Current time in millis (add to action queue): {millis}");
+                using (Py.GIL())
+                {
+                    actions = (int[])output;
+                }
 
                 // Convert it to a C# Item object
                 CelesteBotInteropModule.ActionManager.PythonAddAction(actions);
 
             }
 
+        }
+
+        static void ObservationQueueProducer(dynamic python_celeste_client)
+        {
+            // Sends Observations of Game State to Python client
+            CelesteBotManager.Log("Py Observation Producer Loop Initializing");
+
+
+            // Loop through the Python queue and add each item to the BlockingCollection
+            while (true)
+            {
+                //CelesteBotManager.Log("Attempting Observation queue get");
+                // Convert it to a C# Item object
+                GameState obs = CelesteBotInteropModule.GameStateManager.PythonGetNextObservation();
+                using (Py.GIL())
+                {
+                    PyObject stamina = obs.Stamina.ToPython();
+                    PyList speed = ToPyList(obs.Speed);
+                    PyObject canDash = obs.CanDash.ToPython();
+                    PyObject reward = obs.Reward.ToPython();
+                    PyObject deathFlag = obs.DeathFlag.ToPython();
+                    PyObject finishedLevel = obs.FinishedLevel.ToPython();
+                    long millis = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+
+
+                    python_celeste_client.ext_add_observation(obs.Vision, speed, canDash, stamina, reward, deathFlag, finishedLevel);
+                    CelesteBotManager.Log($"Current time in millis (add to obs x final): {millis}");
+
+                }
+            }
+
+        }
+        static void Test(dynamic celeste_client)
+        {
+            celeste_client.ext_test();
         }
         static PyList ToPyList(int[] ints)
         {
@@ -108,46 +154,10 @@ namespace CelesteBot_2023
             foreach (float f in floats)
             {
                 list.Append(new PyFloat(f));
-                  
+
             }
             return list;
 
-        }
-        static void ObservationQueueProducer(dynamic python_celeste_client)
-        {
-            // Sends Observations of Game State to Python client
-
-
-            // Loop through the Python queue and add each item to the BlockingCollection
-            while (true)
-            {
-                //CelesteBotManager.Log("Attempting Observation queue get");
-                // Convert it to a C# Item object
-                GameState obs = CelesteBotInteropModule.ObservationManager.PythonGetNextObservation();
-                PyList vision = new PyList();
-
-                for (int i = 0; i < CelesteBotManager.VISION_2D_X_SIZE; i++)
-                {
-                    PyList sublist = new PyList();
-                    for (int j = 0; j < CelesteBotManager.VISION_2D_Y_SIZE; j++)
-                    {
-                        sublist.Append(new PyInt(obs.Vision[j][i]));
-                    }
-                    vision.Append(sublist); 
-                }
-                PyObject stamina = obs.Stamina.ToPython();
-                PyList speed = ToPyList(obs.Speed);
-                PyObject canDash = obs.CanDash.ToPython();
-                PyObject reward = obs.Reward.ToPython();
-                PyObject deathFlag = obs.DeathFlag.ToPython();
-
-                python_celeste_client.ext_add_observation(vision, speed, canDash, stamina, reward, deathFlag);
-            }
-
-        }
-        static void Test(dynamic celeste_client)
-        {
-            celeste_client.ext_test();
         }
     }
 }

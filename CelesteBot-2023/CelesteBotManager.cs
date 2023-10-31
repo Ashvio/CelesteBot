@@ -32,8 +32,8 @@ namespace CelesteBot_2023
 
         public static double WEIGHT_MAXIMUM = 3; // Max magnitude a weight can be (+- this number)
 
-        public static int VISION_2D_X_SIZE = 10; // X Size of the Vision array
-        public static int VISION_2D_Y_SIZE = 10; // Y Size of the Vision array
+        public static int VISION_2D_X_SIZE = 20; // X Size of the Vision array
+        public static int VISION_2D_Y_SIZE = 20; // Y Size of the Vision array
         public static int TILE_2D_X_CACHE_SIZE = 1000;
         public static int TILE_2D_Y_CACHE_SIZE = 1000;
         public static int ENTITY_CACHE_UPDATE_FRAMES = 10;
@@ -58,7 +58,7 @@ namespace CelesteBot_2023
         //public static int POPULATION_SIZE = 50;
 
         public static int PLAYER_GRACE_BUFFER = 160; // How long between restarts should the next player be created, some arbitrary number of frames
-        public static double PLAYER_DEATH_TIME_BEFORE_RESET = 4; // How many seconds after a player dies should the next player be created and the last one deleted
+        public static double PLAYER_DEATH_TIME_BEFORE_RESET = 3.5; // How many seconds after a player dies should the next player be created and the last one deleted
 
         // Paths/Prefixes
         public static string ORGANISM_PATH = @"organismNames.txt";
@@ -78,10 +78,6 @@ namespace CelesteBot_2023
         public static int QMaxRewardIteration = 0;
 
         // Q Learning Settings
-        public static double QLearningRate { get { return CelesteBotInteropModule.Settings.QLearningRate / 100.0; } set { } }
-        public static double QGamma { get { return CelesteBotInteropModule.Settings.QGamma / 100.0; } set { } }
-        public static double QEpsilon = CelesteBotInteropModule.Settings.MaxQEpsilon / 100.0;
-        public static int QGraphIterations { get { return CelesteBotInteropModule.Settings.QGraphIterations; } set { } }
 
         public static Thread PythonThread;
         //private static Assembly ResolvePython(object sender, ResolveEventArgs args)
@@ -117,8 +113,9 @@ namespace CelesteBot_2023
 
             PythonManager.Setup();
 
-            PythonThread = new Thread(new ThreadStart(PythonManager.Initialize));
-            PythonThread.Start();
+            //PythonThread = new Thread(new ThreadStart(PythonManager.Initialize));
+            //PythonThread.Start();
+            PythonManager.Initialize();
             ACTION_THRESHOLD = (float)(Convert.ToDouble(CelesteBotInteropModule.Settings.ActionThreshold) / 100.0); // The value that must be surpassed for the output to be accepted
 
 
@@ -202,7 +199,7 @@ namespace CelesteBot_2023
                 }
                 try
                 {
-                    Level level = (Level)Celeste.Celeste.Scene;
+                    Level level = (Level)Engine.Scene;
 
                     if (level.InCutscene)
                     {
@@ -237,10 +234,7 @@ namespace CelesteBot_2023
             return false;
         }
 
-        public static float Normalize(float value, float min, float max)
-        {
-            return (value - (max - min) / 2) / ((max - min) / 2);
-        }
+
         public static void DrawPlayer(CelestePlayer p)
         {
 
@@ -323,8 +317,8 @@ namespace CelesteBot_2023
         {
             try
             {
-                Player player = Celeste.Celeste.Scene.Tracker.GetEntity<Player>();
-                Level level = (Level)Celeste.Celeste.Scene;
+                Player player = Engine.Scene.Tracker.GetEntity<Player>();
+                Level level = (Level)Engine.Scene;
 
                 Monocle.Draw.Rect(0f, 60f, 600f, 30f, Color.Black * 0.8f);
                 ActiveFont.Draw(level.Session.MapData.Filename + "_" + level.Session.Level + ": [" + player.BottomCenter.X + ", " + player.BottomCenter.Y + ", " + player.Speed.X + ", " + player.Speed.Y + "]", new Vector2(3, 60), Vector2.Zero, new Vector2(0.45f, 0.45f), Color.White);
