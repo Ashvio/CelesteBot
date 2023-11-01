@@ -91,8 +91,6 @@ namespace CelesteBot_2023
                 int[] actions;
 
                 dynamic output = py_action_queue.get();
-                long millis = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-                CelesteBotManager.Log($"Current time in millis (add to action queue): {millis}");
                 using (Py.GIL())
                 {
                     actions = (int[])output;
@@ -125,11 +123,8 @@ namespace CelesteBot_2023
                     PyObject reward = obs.Reward.ToPython();
                     PyObject deathFlag = obs.DeathFlag.ToPython();
                     PyObject finishedLevel = obs.FinishedLevel.ToPython();
-                    long millis = DateTimeOffset.Now.ToUnixTimeMilliseconds();
-
 
                     python_celeste_client.ext_add_observation(obs.Vision, speed, canDash, stamina, reward, deathFlag, finishedLevel);
-                    CelesteBotManager.Log($"Current time in millis (add to obs x final): {millis}");
 
                 }
             }

@@ -255,7 +255,6 @@ namespace CelesteBot_2023
             // for now, only do N  calculations a second
             if (CurrentPlayer.Episode.IsCalculateFrame())
             {
-                CelesteBotManager.Log("Calculating action");
                 CurrentPlayer.Update();
                 if (CurrentPlayer.WaitingForRespawn) // If we are waiting for a respawn, just skip this frame
                 {
@@ -383,8 +382,18 @@ namespace CelesteBot_2023
             {
                 for (int i = 0; i < FrameLoops; i++)
                 {
-                    original(self, gameTime);
+                    try
+                    {
+                        original(self, gameTime);
+                    }
+                    catch (NullReferenceException)
+                    {
+                        // we're going tooo fast, so wait 10 milliseconds
+                        CelesteBotManager.Log("NullReferenceException on engine update, waiting 20 milliseconds", LogLevel.Warn);
+                        System.Threading.Thread.Sleep(20);
+                    }
                 }
+                    
             }
             else
             {

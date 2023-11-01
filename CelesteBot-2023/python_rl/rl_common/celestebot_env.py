@@ -76,7 +76,6 @@ class CelesteEnv(gym.Env):
     def step(self, action: ActType) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         self.add_action(action)
         observation = self.observation_queue.get()
-        logging.log(logging.INFO, "Current time in milliseconds after getting obs: " + str(int(time.time() * 1000)))
 
         reward = self.reward_queue.get()
         termination_event = self.termination_event_queue.get()

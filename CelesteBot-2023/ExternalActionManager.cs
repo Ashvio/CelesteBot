@@ -127,8 +127,6 @@ namespace CelesteBot_2023
         public void PythonAddAction(int[] action)
         {
             ActionQueue.Add(new Action(action));
-            CelesteBotManager.Log("Added Action to queue");
-
         }
 
         public Action GetNextAction()

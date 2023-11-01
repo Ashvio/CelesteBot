@@ -32,14 +32,12 @@ namespace CelesteBot_2023
 
         public static double WEIGHT_MAXIMUM = 3; // Max magnitude a weight can be (+- this number)
 
-        public static int VISION_2D_X_SIZE = 20; // X Size of the Vision array
-        public static int VISION_2D_Y_SIZE = 20; // Y Size of the Vision array
+        public static readonly int VISION_2D_X_SIZE = 20; // X Size of the Vision array
+        public static readonly int VISION_2D_Y_SIZE = 20; // Y Size of the Vision array
         public static int TILE_2D_X_CACHE_SIZE = 1000;
         public static int TILE_2D_Y_CACHE_SIZE = 1000;
         public static int ENTITY_CACHE_UPDATE_FRAMES = 10;
         public static int FAST_MODE_MULTIPLIER = 10;
-        public static int INPUTS = VISION_2D_X_SIZE * VISION_2D_Y_SIZE + 6;
-        public static int OUTPUTS = 6;
 
         // Moving Fitness Parameters
         public static float UPDATE_TARGET_THRESHOLD = 8; // Pixels in distance between the fitness target and the current position before considering it "reached"
@@ -101,9 +99,9 @@ namespace CelesteBot_2023
         //        return null;
         //    }
         //}
-        public static void Log(string message)
+        public static void Log(string message, LogLevel level = LogLevel.Verbose)
         {
-            Logger.Log(CelesteBotInteropModule.ModLogKey, message);
+            Logger.Log(level, CelesteBotInteropModule.ModLogKey, message);
         }
 
         public static void Initialize()
@@ -119,14 +117,11 @@ namespace CelesteBot_2023
             ACTION_THRESHOLD = (float)(Convert.ToDouble(CelesteBotInteropModule.Settings.ActionThreshold) / 100.0); // The value that must be surpassed for the output to be accepted
 
 
-            VISION_2D_X_SIZE = CelesteBotInteropModule.Settings.XVisionSize; // X Size of the Vision array
-            VISION_2D_Y_SIZE = CelesteBotInteropModule.Settings.YVisionSize; // Y Size of the Vision array
             TILE_2D_X_CACHE_SIZE = CelesteBotInteropModule.Settings.XMaxCacheSize; // X Size of max cache size
             TILE_2D_Y_CACHE_SIZE = CelesteBotInteropModule.Settings.YMaxCacheSize; // Y Size of max cache size
             ENTITY_CACHE_UPDATE_FRAMES = CelesteBotInteropModule.Settings.EntityCacheUpdateFrames; // Frames between updating entity cache
             FAST_MODE_MULTIPLIER = CelesteBotInteropModule.Settings.FastModeMultiplier; // speed multiplier for fast mode
-            INPUTS = VISION_2D_X_SIZE * VISION_2D_Y_SIZE + 6;
-            OUTPUTS = 6;
+
 
             UPDATE_TARGET_THRESHOLD = CelesteBotInteropModule.Settings.UpdateTargetThreshold;
 

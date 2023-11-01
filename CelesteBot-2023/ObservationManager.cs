@@ -40,8 +40,6 @@ namespace CelesteBot_2023
         public void AddObservation(GameState obs)
         {
             GameStateQueue.Add(obs);
-            CelesteBotManager.Log("Added Observation to queue");
-
         }
 
         public GameState PythonGetNextObservation()

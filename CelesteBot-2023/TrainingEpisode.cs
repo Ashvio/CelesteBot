@@ -12,7 +12,7 @@ namespace CelesteBot_2023
     {
         int NumFrames { set; get; }
         public Vector2 Target { get; private set; }
-        public bool Died { get;  set; }
+        public bool Died { get; set; }
 
         public bool FinishedLevel { get; set; }
 
@@ -34,7 +34,7 @@ namespace CelesteBot_2023
             Target = Vector2.Zero;
             positionFitnesses = Util.GetPositionFitnesses(FitnessPath);
             velocityFitnesses = Util.GetVelocityFitnesses(FitnessPath);
-            FramesBetweenCalcuations = (int) (60 / CelesteBotInteropModule.Settings.CalculationsPerSecond);
+            FramesBetweenCalcuations = (int)(60 / CelesteBotInteropModule.Settings.CalculationsPerSecond);
         }
 
         public void IncrementFrames()
@@ -44,7 +44,7 @@ namespace CelesteBot_2023
         public void ResetEpisode()
         {
             NumFrames = 0;
-            Died = false; 
+            Died = false;
             FinishedLevel = false;
         }
 
@@ -55,15 +55,10 @@ namespace CelesteBot_2023
                 return 0;
             }
             double distanceFromTarget = (player.player.BottomCenter - Target).Length();
-            //double reward = quasiFitness * 10;
-            //if (player.LastDistanceFromTarget == 0)
-            //{
-            //    LastDistanceFromTarget = distanceFromTarget;
-            //}            //if (player.LastDistanceFromTarget == 0)
-            //{
-            //    LastDistanceFromTarget = distanceFromTarget;
-            //}
             double newDistance = distanceFromTarget - LastDistanceFromTarget;
+            newDistance *= -1;
+            LastDistanceFromTarget = distanceFromTarget;
+
             if (newDistance > 1000)
             {
                 newDistance = 1000;
@@ -72,27 +67,27 @@ namespace CelesteBot_2023
             {
                 newDistance = -1000;
             }
-            double reward = -1 * newDistance;
-            if (NumFrames > 600)
+            double reward = newDistance;
+            if (NumFrames > 60 * 60 )
             {
-                reward -= NumFrames / 10;
+                reward -= 750;
             }
-            LastDistanceFromTarget = newDistance;
+
+            
             if (Died)
             {
-                reward = -10000;
+                reward += -100;
             }
             else if (reward < -750)
             {
-                CelesteBotManager.Log("Killing player because it's reward is too low");
+                CelesteBotManager.Log("Killing player because its reward is too low");
 
                 player.KillPlayer();
             }
             if (FinishedLevel)
             {
-                reward = 10000;
-            } 
-             
+                reward += 10000;
+            }
             CelesteBotManager.Log("Reward: " + reward.ToString("F2"));
             return reward;
         }
@@ -100,7 +95,7 @@ namespace CelesteBot_2023
         {
             if (Target == Vector2.Zero)
             {
-                
+
                 // Enum does not exist yet, lets make it.
                 Level level = TileFinder.GetCelesteLevel();
                 try

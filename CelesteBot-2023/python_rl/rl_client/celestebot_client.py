@@ -105,13 +105,18 @@ class CelesteClient:
         # Note that no config is needed in this script as it will be defined
         # on and sent from the server.
         session = requests.Session()
-        port = _get_available_port(9900)
+        # TODO: Get worker number based on path of executable. Each worker will run in a different copy of Celeste,
+        #  eg /Celeste_001, /Celeste_002
+        port = 9900
         self.client = PolicyClient(
             f"http://127.0.0.1:{port}", inference_mode="remote", session=session
         )
         self.current_episode_id = self.client.start_episode(training_enabled=True)
         self._first_reward = True
-
+        logging.getLogger('requests').setLevel(logging.CRITICAL)
+        # TODO: Figure out why connections keep closing (HTTP BaseHandler is 1.0 not 1.1)
+        logging.getLogger('urllib3.connectionpool').setLevel(logging.CRITICAL)
+        logging.getLogger('urllib3').setLevel(logging.CRITICAL)
         # self.observation_processor = Thread(target=self.process_observation_queue)
         # self.observation_processor.start()
         self.python_logs_txt = "python_logs.txt"
@@ -130,7 +135,6 @@ class CelesteClient:
 
     def ext_add_observation(self, vision, speed_x_y, can_dash, stamina, last_reward, death_flag, finished_level):
         # send observation from .NET to server and get the action and send it to the queue
-        logging.log(logging.INFO, f"Current time in milliseconds add obs to py queue: {str(int(time.time() * 1000))} {str(last_reward)} " )
         observation = OrderedDict()
         observation["can_dash"] = np.array([can_dash])
         observation["map_entities_vision"] = np.array(vision)
@@ -164,18 +168,21 @@ class CelesteClient:
         # actions (from the server if "remote"; if "local" we'll compute them
         # on this client side), and send back observations and rewards.
         try:
+
             # Start a new episode.
             obs, info = self.env.reset()
             episode_id = self.client.start_episode(training_enabled=True)
             self.logger.log(logging.INFO, "Started episode, observation: " + str(obs))
             rewards = 0.0
+            start_time = time.time() / 1000
+            action_count = 0
             while True:
                 # Compute an action randomly (off-policy) and log it.
 
                 # Compute an action locally or remotely (on server).
                 # No need to log it here as the action
                 # self.logger.log(logging.DEBUG, "Querying action: " + str(episode_id))
-
+                action_count += 1
                 action = self.client.get_action(episode_id, obs)
 
                 # self.logger.log(logging.DEBUG, "Got action: " + str(action))
@@ -192,7 +199,10 @@ class CelesteClient:
                 # Reset the episode if done.
                 if terminated or truncated:
                     self.logger.log(logging.INFO, f"Total reward for episode: {rewards}. Episode ended due to: {info}")
-
+                    end_time = time.time()
+                    self.logger.log(logging.INFO, f"Episode took {end_time - start_time} seconds and  {action_count/(end_time - start_time)} actions per second")
+                    start_time = time.time()
+                    action_count = 0
                     rewards = 0.0
 
                     # End the old episode.

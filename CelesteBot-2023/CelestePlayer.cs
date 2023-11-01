@@ -30,7 +30,6 @@ namespace CelesteBot_2023
         private float AverageStamina = 110;
         public float UnadjustedFitness;
         public ArrayList ReplayActions = new ArrayList();
-        public float[] Actions = new float[CelesteBotManager.OUTPUTS];
         public int Lifespan = 0;
         public bool WaitingForRespawn = false;
         public bool Replay = false;
@@ -124,6 +123,7 @@ namespace CelesteBot_2023
                 {
                     return;
                 }
+                Episode.ResetEpisode();
             }
             // This is to make sure that we don't try to reset while we are respawning
             if (player.Dead)
@@ -133,10 +133,8 @@ namespace CelesteBot_2023
                 return;
             }
             UpdateVision();
-            CelesteBotManager.Log("Visions calculated");
             Episode.UpdateTarget();
             CalculateGameState();
-            CelesteBotManager.Log("Game state calculated");
             //Look();
             //Think();
 
@@ -173,7 +171,7 @@ namespace CelesteBot_2023
                 //TileFinder.TilesOffset = Celeste.Celeste.Scene.Entities.FindFirst<SolidTiles>().Center; // Thanks KDT#7539!
                 TileFinder.SetupOffset();
             }
-            catch (NullReferenceException e)
+            catch (NullReferenceException)
             {
                 // The Scene hasn't been created yet.
             }
@@ -252,8 +250,7 @@ namespace CelesteBot_2023
             Outputs: U, D, L, R, Jump, Dash, Climb
             If any of the outputs are above 0.7, apply them when returning controller output
             */
-            double reward = 0;
-            reward = Episode.GetReward();
+            double reward = Episode.GetReward();
             GameState CurrentGameState = new GameState(Vision2D, player.Speed.X, player.Speed.Y, player.Stamina, player.CanDash, reward, Episode.Died, Episode.FinishedLevel);
             CelesteBotInteropModule.GameStateManager.AddObservation(CurrentGameState);
             if (Episode.FinishedLevel || Episode.Died)
@@ -272,7 +269,6 @@ namespace CelesteBot_2023
         public void Dispose()
         {
             ReplayActions = null;
-            Actions = null;
         }
 
     }

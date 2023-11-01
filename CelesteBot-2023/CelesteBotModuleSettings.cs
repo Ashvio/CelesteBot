@@ -34,12 +34,10 @@ namespace CelesteBot_2023
         [SettingRange(60, 240)]
         public int TalkFrameBuffer { get; set; } = 100;
         [SettingRange(4, 30), SettingNeedsRelaunch()]
-        public int XVisionSize { get; set; } = 10;
-        [SettingRange(4, 30), SettingNeedsRelaunch()]
+
         public int CalculationsPerSecond { get; set; } = 8;
         [SettingRange(4, 10), SettingNeedsRelaunch()]
-        public int YVisionSize { get; set; } = 10;
-        [SettingRange(60, 3000), SettingNeedsRelaunch()]
+
         public int XMaxCacheSize { get; set; } = 1000;
         [SettingRange(60, 3000), SettingNeedsRelaunch()]
         public int YMaxCacheSize { get; set; } = 1000;
