@@ -41,7 +41,7 @@ namespace CelesteBot_2023
 
         public static void GetAllEntities()
         {
-            EntityList entities = Celeste.Celeste.Scene.Entities;
+            EntityList entities = Engine.Scene.Entities;
             string readableText = "";
             for (int i = 0; i < entities.Count; i++)
             {
@@ -55,7 +55,7 @@ namespace CelesteBot_2023
         public static void SetupOffset()
         {
             Vector2 min = new Vector2(0, 0);
-            EntityList list = Celeste.Celeste.Scene.Entities;
+            EntityList list = Engine.Scene.Entities;
             for (int i = 0; i < list.Count; i++)
             {
                 if (list[i].BottomCenter.X < min.X)
@@ -69,7 +69,7 @@ namespace CelesteBot_2023
             }
             try
             {
-                celesteLevel = (Level)Celeste.Celeste.Scene;
+                celesteLevel = (Level)Engine.Scene;
                 tiles = celesteLevel.SolidTiles;
                 tileArray = tiles.Tiles.Tiles.ToArray();
             }
@@ -91,7 +91,7 @@ namespace CelesteBot_2023
             }
             try
             {
-                celesteLevel = (Level)Celeste.Celeste.Scene;
+                celesteLevel = (Level)Engine.Scene;
             }
             catch (NullReferenceException e)
             {
@@ -117,7 +117,7 @@ namespace CelesteBot_2023
         {
             try
             {
-                Level celesteLevel = (Level)Celeste.Celeste.Scene;
+                Level celesteLevel = (Level)Engine.Scene;
                 SolidTiles tiles = celesteLevel.SolidTiles;
                 MTexture[,] tileArray = tiles.Tiles.Tiles.ToArray();
                 Vector2 tile = GetTileXY(realPos);
@@ -183,7 +183,7 @@ namespace CelesteBot_2023
             try
             {
 
-                EntityList entities = Celeste.Celeste.Scene.Entities;
+                EntityList entities = Engine.Scene.Entities;
 
                 for (int i = 0; i < entities.Count; i++)
                 {
@@ -216,7 +216,7 @@ namespace CelesteBot_2023
         {
             try
             {
-                EntityList entities = Celeste.Celeste.Scene.Entities;
+                EntityList entities = Engine.Scene.Entities;
 
                 for (int i = 0; i < entities.Count; i++)
                 {
@@ -251,7 +251,7 @@ namespace CelesteBot_2023
 
             if (tileCache[xind, yind] == Entity.Unset)
             {
-                EntityList entities = Celeste.Celeste.Scene.Entities;
+                EntityList entities = Engine.Scene.Entities;
                 Vector2 real = RealFromTile(tile);
                 for (int i = 0; i < entities.Count; i++)
                 {
@@ -286,7 +286,7 @@ namespace CelesteBot_2023
         {
             try
             {
-                celesteLevel = (Level)Celeste.Celeste.Scene;
+                celesteLevel = (Level)Engine.Scene;
             }
             catch (Exception e)
             {
@@ -310,7 +310,7 @@ namespace CelesteBot_2023
 
             entityCache = new Entity[tileCache.GetLength(0), tileCache.GetLength(1)];
 
-            EntityList entities = Celeste.Celeste.Scene.Entities;
+            EntityList entities = Engine.Scene.Entities;
             for (int i = 0; i < entities.Count; i++)
             {
                 if (entities[i].Collidable && entities[i].Collider != null && !(entities[i] is SolidTiles) && !(entities[i] is Player))

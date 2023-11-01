@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "CelesteBot-2023": {
+      "commandName": "celeste.exe",
+      "workingDirectory": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Celeste"
+    },
+    "CelesteDebugger": {
+      "commandName": "Executable",
+      "executablePath": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Celeste\\Celeste.exe",
+      "workingDirectory": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Celeste",
+      "authenticationMode": "None",
+      "nativeDebugging": true
+    }
+  }
+}

@@ -46,8 +46,10 @@ import traceback
 from collections import OrderedDict
 from threading import Thread
 from typing import List, SupportsFloat
+import socket, errno
 
 import numpy as np
+import requests
 from ray.rllib.env.policy_client import PolicyClient
 
 from python_rl.rl_common.celestebot_env import CelesteEnv, TerminationEvent
@@ -74,8 +76,20 @@ parser.add_argument(
 parser.add_argument(
     "--port", type=int, default=9900, help="The port to use (on localhost)."
 )
+def _get_available_port(base_port: int = 9900) -> int:
+    current_port = base_port
+    while current_port < base_port + 100:
 
-
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", 5555))
+            except socket.error as e:
+                if e.errno == errno.EADDRINUSE:
+                    current_port += 1
+                    continue
+                else:
+                    return current_port
+            current_port += 1
 class CelesteClient:
 
     def __init__(self, action_queue=None, worker_number=0):
@@ -85,17 +99,24 @@ class CelesteClient:
         # unnecessary env objects within the PolicyClient/Server objects, but
         # that only this following env and the loop below runs the entire
         # training process.
-        self.env = CelesteEnv(action_queue, False)
+        self.env = CelesteEnv(action_queue)
         # If server has n workers, all ports between 9900 and 990[n-1] should
         # be listened on. E.g. if server has num_workers=2, try 9900 or 9901.
         # Note that no config is needed in this script as it will be defined
         # on and sent from the server.
+        session = requests.Session()
+        # TODO: Get worker number based on path of executable. Each worker will run in a different copy of Celeste,
+        #  eg /Celeste_001, /Celeste_002
+        port = 9900
         self.client = PolicyClient(
-            f"http://localhost:{9900 + worker_number}", inference_mode="remote"
+            f"http://127.0.0.1:{port}", inference_mode="remote", session=session
         )
         self.current_episode_id = self.client.start_episode(training_enabled=True)
         self._first_reward = True
-
+        logging.getLogger('requests').setLevel(logging.CRITICAL)
+        # TODO: Figure out why connections keep closing (HTTP BaseHandler is 1.0 not 1.1)
+        logging.getLogger('urllib3.connectionpool').setLevel(logging.CRITICAL)
+        logging.getLogger('urllib3').setLevel(logging.CRITICAL)
         # self.observation_processor = Thread(target=self.process_observation_queue)
         # self.observation_processor.start()
         self.python_logs_txt = "python_logs.txt"
@@ -112,14 +133,14 @@ class CelesteClient:
             self.env.add_action(np.array([0, 1, 1, 0]))
             time.sleep(30)
 
-    def ext_add_observation(self, vision, speed_x_y, can_dash, stamina, last_reward, death_flag):
+    def ext_add_observation(self, vision, speed_x_y, can_dash, stamina, last_reward, death_flag, finished_level):
         # send observation from .NET to server and get the action and send it to the queue
-        observation = OrderedDict({
-            "map_entities_vision": np.array(vision),
-            "speed_x_y": np.array(speed_x_y),
-            "can_dash": np.array([can_dash]),
-            "stamina": np.array([stamina])
-        })
+        observation = OrderedDict()
+        observation["can_dash"] = np.array([can_dash])
+        observation["map_entities_vision"] = np.array(vision)
+        observation["speed_x_y"] = np.array(speed_x_y)
+        observation["stamina"] = np.array([stamina])
+
         self.env.observation_queue.put(observation)
         if self._first_reward:
             # we get rewards from the current game state, so we don't want to send the last reward from the previous game state
@@ -129,12 +150,16 @@ class CelesteClient:
             self.env.reward_queue.put(last_reward)
         if death_flag:
             self.env.termination_event_queue.put(TerminationEvent.DEATH)
+        elif finished_level:
+            self.env.termination_event_queue.put(TerminationEvent.FINISHED_LEVEL)
         else:
             self.env.termination_event_queue.put(TerminationEvent.NORMAL)
 
     def ext_get_action(self):
         # send action to .NET
+        # time how long this takes:
         action = self.client.get_action(self.current_episode_id, self.env.observation_queue.get())
+
         return [int(x) for x in action.tolist()]
 
     def start_training(self):
@@ -143,37 +168,47 @@ class CelesteClient:
         # actions (from the server if "remote"; if "local" we'll compute them
         # on this client side), and send back observations and rewards.
         try:
+
             # Start a new episode.
             obs, info = self.env.reset()
             episode_id = self.client.start_episode(training_enabled=True)
             self.logger.log(logging.INFO, "Started episode, observation: " + str(obs))
             rewards = 0.0
+            start_time = time.time() / 1000
+            action_count = 0
             while True:
                 # Compute an action randomly (off-policy) and log it.
 
                 # Compute an action locally or remotely (on server).
                 # No need to log it here as the action
-                self.logger.log(logging.DEBUG, "Querying action: " + str(episode_id))
-
+                # self.logger.log(logging.DEBUG, "Querying action: " + str(episode_id))
+                action_count += 1
                 action = self.client.get_action(episode_id, obs)
-                self.logger.log(logging.DEBUG, "Got action: " + str(action))
+
+                # self.logger.log(logging.DEBUG, "Got action: " + str(action))
                 # Perform a step in the external simulator (env).
+
                 obs, reward, terminated, truncated, info = self.env.step(action)
+
                 rewards += reward
 
                 # Log next-obs, rewards, and infos.
                 # noinspection PyTypeChecker
-                self.client.log_returns(episode_id, reward, info=info)
 
+                self.client.log_returns(episode_id, reward, info=info)
                 # Reset the episode if done.
                 if terminated or truncated:
-                    print("Total reward:", rewards)
-
+                    self.logger.log(logging.INFO, f"Total reward for episode: {rewards}. Episode ended due to: {info}")
+                    end_time = time.time()
+                    self.logger.log(logging.INFO, f"Episode took {end_time - start_time} seconds and  {action_count/(end_time - start_time)} actions per second")
+                    start_time = time.time()
+                    action_count = 0
                     rewards = 0.0
 
                     # End the old episode.
                     self.client.end_episode(episode_id, obs)
-
+                    # Tell Madeline to do nothing to get the next observation
+                    self.env.add_action(self.env.NOOP_ACTION)
                     # Start a new episode.
                     obs, info = self.env.reset()
                     self._first_reward = True

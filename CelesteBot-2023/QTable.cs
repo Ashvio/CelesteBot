@@ -209,7 +209,6 @@ namespace CelesteBot_2023
         public static void CreateActionDictionary()
         {
             actionIndexList = new List<InputData>();
-            float[] tempActionArr = new float[CelesteBotManager.OUTPUTS];
 
             //   CalculatePossibleActions(tempActionArr);
         }

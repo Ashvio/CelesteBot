@@ -1,10 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
-    <PropertyGroup>
+	<PropertyGroup>
+		<PlatformTarget>x64</PlatformTarget>
+	</PropertyGroup>
+	<PropertyGroup>
 		<TargetFramework>net7.0</TargetFramework>
 		<AssemblyName>CelesteBot_2023</AssemblyName>
-        <RootNamespace>Celeste.Mod.CelesteBot_2023</RootNamespace>
-        <LangVersion>latest</LangVersion>
+		<RootNamespace>Celeste.Mod.CelesteBot_2023</RootNamespace>
+		<LangVersion>latest</LangVersion>
 		<CelestePrefix>C:\Program Files (x86)\Steam\steamapps\common\Celeste</CelestePrefix>
 
 		<CelestePrefix Condition="'$(CelestePrefix)' == '' And (Exists('..\..\Celeste.exe') Or Exists('..\..\Celeste.dll'))">..\..</CelestePrefix>

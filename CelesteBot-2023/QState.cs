@@ -19,7 +19,7 @@ namespace CelesteBot_2023
         public QState(CelestePlayer player)
         {
 
-            Vision = Vision.Take(CelesteBotManager.VISION_2D_X_SIZE * CelesteBotManager.VISION_2D_Y_SIZE).ToArray();
+            //Vision = Vision.Take(CelesteBotManager.VISION_2D_X_SIZE * CelesteBotManager.VISION_2D_Y_SIZE).ToArray();
             //Vision = player.Vision;
         }
         private QState(float[] Vision)
