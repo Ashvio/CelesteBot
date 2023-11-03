@@ -46,12 +46,12 @@ namespace CelesteBot_2023
             //    newData.Grab = false;
             //    newData.GrabValue = 0;
             //}
-            if ((LastData.LongJumpValue < 0 && newData.LongJumpValue > 0) || (newData.LongJumpValue < 0 && LastData.LongJumpValue > 0))
-            {
-                // Release for one frame
-                newData.Jump = false;
-                newData.JumpValue = 0;
-            }
+            //if ((LastData.LongJumpValue < 0 && newData.LongJumpValue > 0) || (newData.LongJumpValue < 0 && LastData.LongJumpValue > 0))
+            //{
+            //    // Release for one frame
+            //    newData.Jump = false;
+            //    newData.JumpValue = 0;
+            //}
 
             Data = newData;
         }

@@ -114,6 +114,12 @@ class CelesteClient:
         # be listened on. E.g. if server has num_workers=2, try 9900 or 9901.
         # Note that no config is needed in this script as it will be defined
         # on and sent from the server.
+        self.python_logs_txt = "python_logs.txt"
+        logging.basicConfig(filename=self.python_logs_txt,
+                            filemode='w+',
+                            datefmt='%H:%M:%S')
+        self.logger = logging.getLogger('PythonClientLogger')
+        self.logger.log(logging.INFO, "Python client started")
         session = requests.Session()
         # TODO: Get worker number based on path of executable. Each worker will run in a different copy of Celeste,
         #  eg /Celeste_001, /Celeste_002
@@ -127,13 +133,14 @@ class CelesteClient:
             # base Celeste game
             self.is_worker = False
             worker_number = 0
-        num_client_workers = 9
+        num_client_workers = 4
         num_server_workers = celestebot_server.NUM_WORKERS
         num_clients_per_server = num_client_workers // num_server_workers
         server_number = worker_number // num_clients_per_server
         if server_number >= num_server_workers:
             server_number -= 1
         port = 9900 + server_number
+        self.logger.log( logging.INFO, f"Connecting to port {port}")
         # port = 9900
         self.client = PolicyClient(
             f"http://127.0.0.1:{port}", inference_mode="remote", session=session
@@ -144,29 +151,25 @@ class CelesteClient:
             log_level = logging.INFO
         else:
             log_level = logging.DEBUG
+        self.logger.setLevel(log_level)
         logging.getLogger('requests').setLevel(logging.CRITICAL)
         # TODO: Figure out why connections keep closing (HTTP BaseHandler is 1.0 not 1.1)
         logging.getLogger('urllib3.connectionpool').setLevel(logging.CRITICAL)
         logging.getLogger('urllib3').setLevel(logging.CRITICAL)
         # self.observation_processor = Thread(target=self.process_observation_queue)
         # self.observation_processor.start()
-        self.python_logs_txt = "python_logs.txt"
-        logging.basicConfig(filename=self.python_logs_txt,
-                            filemode='w+',
-                            datefmt='%H:%M:%S',
-                            level=log_level)
-        self.logger = logging.getLogger('PythonClientLogger')
-        self.logger.log(logging.INFO, "Python client started")
+
         self.info_queue = queue.Queue()
         self.env = CelesteEnv(action_queue, logger=self.logger)
 
-    def ext_test(self):
-        print("Hello from python")
-        while True:
-            self.env.add_action(np.array([0, 1, 1, 0]))
-            time.sleep(30)
+    # def ext_test(self):
+    #     print("Hello from python")
+    #     while True:
+    #         self.env.add_action(np.array([0, 1, 1, 0]))
+    #         time.sleep(30)
 
-    def ext_add_observation(self, vision, speed_x_y, can_dash, stamina, death_flag, finished_level, target, position, is_climbing, on_ground):
+    def ext_add_observation(self, vision, speed_x_y, can_dash, stamina, death_flag, finished_level, target, position,
+                            screen_position, is_climbing, on_ground):
         # send observation from .NET to server and get the action and send it to the queue
         observation = OrderedDict()
         observation["can_dash"] = np.array([can_dash])
@@ -175,7 +178,7 @@ class CelesteClient:
         observation["map_entities_vision"] = np.array(vision)
         observation["on_ground"] = np.array([on_ground])
         observation["position"] = np.array(position)
-        observation["screen_position"] = np.array(position)
+        observation["screen_position"] = np.array(screen_position)
 
         observation["speed_x_y"] = np.array(speed_x_y)
         observation["stamina"] = np.array([stamina])
@@ -202,7 +205,8 @@ class CelesteClient:
         # send action to .NET
         # time how long this takes:
         action = self.client.get_action(self.current_episode_id, self.env.observation_queue.get())
-
+        if len(action) < 5:
+            self.logger.log(logging.ERROR, f"Action is too short: {action}")
         return [int(x) for x in action.tolist()]
 
     def log_rewards(self):
@@ -256,7 +260,7 @@ class CelesteClient:
                     self.logger.log(logging.DEBUG, f"Reward for Action {action}: {reward}")
 
                 self.client.log_returns(self.current_episode_id, np.float64(reward))
-
+                self.episode_rewards += reward
                 # Log next-obs, rewards, and infos.
                 # self.info_queue.put(info)
                 # self.log_reward()

@@ -22,6 +22,7 @@ namespace CelesteBot_2023
     {
         NOOP,
         Jump,
+        LongJump,
         Dash,
     }
     enum GrabActionType
@@ -29,7 +30,6 @@ namespace CelesteBot_2023
         NOOP,
         Grab,
     }
-
     public class Action
     {
         /*
@@ -40,6 +40,7 @@ namespace CelesteBot_2023
         LeftRightActionType LeftRightAction;
         SpecialMoveActionType SpecialMoveAction;
         GrabActionType grabAction;
+        public int NumFramesBeforeNextUpdate { get; private set; }
 
         public Action(int[] action)
         {
@@ -48,6 +49,12 @@ namespace CelesteBot_2023
 
             SpecialMoveAction = (SpecialMoveActionType)action[2];
             grabAction = (GrabActionType)action[3];
+            NumFramesBeforeNextUpdate = action[4];
+        }
+
+        public override string ToString()
+        {
+            return "Move:" + Enum.GetName(typeof(UpDownActionType), UpDownAction) + " " + Enum.GetName(typeof(LeftRightActionType), LeftRightAction) + "\nSpecial:" + Enum.GetName(typeof(SpecialMoveActionType), SpecialMoveAction) + " Grab:" + Enum.GetName(typeof(GrabActionType), grabAction) + "Requested frames: " + NumFramesBeforeNextUpdate;
         }
 
         public float GetMoveX()
@@ -83,11 +90,25 @@ namespace CelesteBot_2023
         {
             switch (SpecialMoveAction)
             {
-                case SpecialMoveActionType.NOOP:
-                    return false;
                 case SpecialMoveActionType.Jump:
                     return true;
+                case SpecialMoveActionType.NOOP:
                 case SpecialMoveActionType.Dash:
+                case SpecialMoveActionType.LongJump:
+                    return false;
+                default:
+                    return false;
+            }
+        }
+        public bool GetLongJump()
+        {
+            switch (SpecialMoveAction)
+            {
+                case SpecialMoveActionType.LongJump:
+                    return true;
+                case SpecialMoveActionType.NOOP:
+                case SpecialMoveActionType.Dash:
+                case SpecialMoveActionType.Jump:
                     return false;
                 default:
                     return false;
@@ -123,8 +144,8 @@ namespace CelesteBot_2023
     public class ExternalActionManager
     {
         BlockingCollection<Action> ActionQueue;
-        public int numRequestedActions { get; private set; }
-        public int numAvailableActions { get; private set; }
+        public static int numRequestedActions { get; private set; }
+        public static int numAvailableActions { get; private set; }
 
         public ExternalActionManager()
         {
@@ -137,8 +158,21 @@ namespace CelesteBot_2023
             numAvailableActions++;
         }
 
+        public void Flush()
+        {
+            if (ActionQueue.Count > 0 )
+            {
+                CelesteBotManager.Log("Flushing action queue!" + ActionQueue.Count , LogLevel.Warn);
+            }
+            Action item;
+            while (ActionQueue.TryTake(out item)) { CelesteBotManager.Log(item.ToString()); } 
+        }
         public Action GetNextAction()
         {
+            if (numRequestedActions >= ExternalGameStateManager.NumSentObservations)
+            {
+                CelesteBotManager.Log("Too many actions requested!", LogLevel.Error);   
+            }
             double start = DateTime.Now.TimeOfDay.TotalMilliseconds;
             Action output;
             numRequestedActions++;
@@ -146,6 +180,8 @@ namespace CelesteBot_2023
             if (!success)
             {
                 CelesteBotManager.Log("Action retrieval timed out!", LogLevel.Error);
+                CelesteBotInteropModule.BotState = CelesteBotInteropModule.State.None;
+                CelesteBotInteropModule.Instance.Unload();
                 throw new TimeoutException("Action retrieval timed out!");
             }
             double end = DateTime.Now.TimeOfDay.TotalMilliseconds;

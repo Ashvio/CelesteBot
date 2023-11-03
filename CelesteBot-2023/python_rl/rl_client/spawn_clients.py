@@ -82,18 +82,21 @@ if __name__ == "__main__":
     apps = []
     gamepad = vg.VX360Gamepad()
     try:
-        for process in processes:
-            app = application.Application()
-            app.connect(process=process.pid)
-            window = app.window()
-            window.move_window(x, y, app_width, app_height, repaint=False)
-            x += app_width
-            width_left -= x
-            if width_left <= 3:
-                y += app_height
-                x = 0
-                width_left = SCREEN_WIDTH
-            apps.append(app)
+        for i in range(num_rows):
+            for j in range(num_rows):
+                if i * num_rows + j >= args.num_workers:
+                    break
+                process = processes[i * num_rows + j]
+                app = application.Application()
+                app.connect(process=process.pid)
+                window = app.window()
+                window.move_window(x, y, app_width, app_height, repaint=False)
+                x += app_width
+                width_left -= x
+                apps.append(app)
+            y += app_height
+            x = 0
+            width_left = SCREEN_WIDTH
     except:
         for process in processes:
             process.kill()
@@ -106,9 +109,9 @@ if __name__ == "__main__":
         window.set_keyboard_focus()
         for i in range(10):
             # Start the game
+            time.sleep(0.05)
             gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
             gamepad.update()
-            time.sleep(0.02)
+            time.sleep(0.05)
             gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
             gamepad.update()
-            time.sleep(0.1)

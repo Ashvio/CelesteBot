@@ -115,7 +115,7 @@ namespace CelesteBot_2023
                 }
 
                 // Convert it to a C# Item object
-                CelesteBotInteropModule.ActionManager.PythonAddAction(actions);
+                ActionManager.PythonAddAction(actions);
 
             }
 

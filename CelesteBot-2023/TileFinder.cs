@@ -11,8 +11,8 @@ namespace CelesteBot_2023
         Unset = 0,
         Air = 1,
         Tile = 2,
-        Other = 3,
-        IntroCrusher = 4,
+        Madeline = 3,
+        Other = 4,
         JumpthruPlatform = 5,
         Spring = 6,
         Strawberry = 7,
@@ -25,7 +25,9 @@ namespace CelesteBot_2023
         ChangeRespawnTrigger = 14,
         FallingBlock = 15,
         IntroCar = 16,
-        IntroPavement = 17
+        IntroPavement = 17,
+        IntroCrusher = 18,
+
     }
     public class TileFinder
     {

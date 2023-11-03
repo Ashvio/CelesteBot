@@ -178,7 +178,7 @@ if __name__ == "__main__":
         # Specifies the hyperparam search space
         hyperparam_bounds={
             "lambda": [0.9, 1.0],
-            "clip_param": [0.1, 0.5],
+            "clip_param": [0.2, 0.5],
             "lr": [1e-5, 1e-3],
             "train_batch_size": [1000, 60000],
         },
@@ -208,12 +208,13 @@ if __name__ == "__main__":
 
         .framework("torch")
         .resources(
-            num_cpus_per_worker=18 // NUM_WORKERS,
+            num_cpus_per_worker=20 / NUM_WORKERS,
             # local_gpu_idx=0,
             num_cpus_for_local_worker=4,
             # num_cpus_per_learner_worker=1,
             num_gpus_per_learner_worker=0.2,
-            num_gpus_per_worker=0.8/ NUM_WORKERS,
+            num_gpus_per_worker=1/ NUM_WORKERS,
+            num_learner_workers=1
             # num_gpus=1,
         )
         # Create a "chatty" client/server or not.
@@ -249,17 +250,20 @@ if __name__ == "__main__":
                 "use_lstm": False,
                 "use_attention": True,
                 "dim": CelesteEnv.VISION_SIZE,
-                "conv_filters": [[16, [3, 3], 2], [32, [3, 3], 2], [64, [4, 4], 1]],
+                "conv_filters": [[16, [3, 3], 2], [32, [3, 3], 2], [64, [3, 3], 1]],
+                # "attention_use_n_prev_actions": 6,
                 # "entropy_coeff_schedule": [[0, 1e-3]]
             },
             "entropy_coeff": 1e-2,
             "count_steps_by": "env_steps",
             "num_sgd_iter": 10,
-            "sgd_minibatch_size": 100,
+            "sgd_minibatch_size": 64,
+            "gamma": sample_from(lambda spec: random.uniform(0.9, 0.96)),
             "lambda": sample_from(lambda spec: random.uniform(0.9, 1.0)),
             "clip_param": sample_from(lambda spec: random.uniform(0.2, 0.4)),
-            "lr": sample_from(lambda spec: random.uniform(1e-3, 1e-5)),
-            "train_batch_size": sample_from(lambda spec: random.randint(100, 500)),
+            # "lr": sample_from(lambda spec: random.uniform(1e-3, 1e-5)),
+            "train_batch_size": 512,
+            "lr_schedule": [[0, 1e-3], [100000, 1e-4], [2000000, 1e-5]],
             # "normalize_actions": False
         }
     )

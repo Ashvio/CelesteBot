@@ -10,6 +10,7 @@ using Celeste;
 using CelesteBot_2023.SimplifiedGraphics;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using FMOD;
+using System.Collections;
 
 /*
 This is the CelesteBotInteropModule class located in the CelesteBotInteropModule.cs file. It is a module that allows 
@@ -53,7 +54,7 @@ namespace CelesteBot_2023
 
         public static int FrameCounter { get; private set; }
         public static bool RunActionNextFrame { get; private set; }
-
+        public static Action LastAction { get; private set; }
         public static bool FitnessAppendMode = false;
         public static bool ShowNothing = false;
 
@@ -74,9 +75,9 @@ namespace CelesteBot_2023
         private static int TalkMaxAttempts = 30; // How many attempts until we give up attempting to talk to something
         private static int MaxTimeSinceLastTalk = 100; // Number of skipped frames when we can talk if we have recently talked to something
         private static int TimeSinceLastTalk = MaxTimeSinceLastTalk; // Keeps track of frames since last talk
-        private static State BotState = State.None;
+        internal static State BotState = State.None;
         [Flags]
-        private enum State
+        public enum State
         {
             None = 0,
             Running = 1,
@@ -103,7 +104,6 @@ namespace CelesteBot_2023
             AttributeUtils.CollectMethods<UnloadAttribute>();
             AttributeUtils.CollectMethods<InitializeAttribute>();
         }
-
         public override void Load()
         {
             AttributeUtils.Invoke<LoadAttribute>();
@@ -112,9 +112,11 @@ namespace CelesteBot_2023
             On.Monocle.MInput.Update += MInput_Update;
             On.Celeste.Celeste.OnSceneTransition += OnScene_Transition;
             On.Celeste.Player.ClimbCheck += Player_ClimbCheck;
-
             Logger.Log(ModLogKey, "Load successful");
         }
+
+
+
         public override void Initialize()
         {
             IsInitializing = true;
@@ -132,12 +134,7 @@ namespace CelesteBot_2023
             MaxTimeSinceLastTalk = Settings.TalkFrameBuffer;
 
         }
-        //public static void GeneratePlayer()
-        //{
-        //    CurrentPlayer = new CelestePlayer();
-        //    CurrentPlayer.Brain.GenerateNetwork();
-        //    CurrentPlayer.Brain.Mutate(innovationHistory);
-        //}
+
         public override void Unload()
         {
             AttributeUtils.Invoke<UnloadAttribute>();
@@ -147,6 +144,7 @@ namespace CelesteBot_2023
             On.Monocle.MInput.Update -= MInput_Update;
             On.Celeste.Celeste.OnSceneTransition -= OnScene_Transition;
             On.Celeste.Player.ClimbCheck -= Player_ClimbCheck;
+
             Logger.Log(ModLogKey, "Unload successful");
         }
 
@@ -162,25 +160,21 @@ namespace CelesteBot_2023
             //FrameCounter++; 
             //if (FrameLoops == 1 || FrameCounter % FrameLoops == 0)
             //{
-                original(self, time);
-                if (BotState == State.Running && Settings.DrawAlways)
-                {
-                    Draw.SpriteBatch.Begin();
-                    DrawMetrics.Draw();
-                    Draw.SpriteBatch.End();
+            original(self, time);
+            if (BotState == State.Running && Settings.DrawAlways)
+            {
+                Draw.SpriteBatch.Begin();
+                DrawMetrics.Draw();
+                Draw.SpriteBatch.End();
 
-                }
+            }
             //}
         }
 
-        private static void Reset(InputData temp)
-        {
-            temp.QuickRestart = true;
-            buffer = CelesteBotManager.PLAYER_GRACE_BUFFER; // sets the buffer to desired wait time... magic
-            inputPlayer.UpdateData(temp);
-        }
+ 
 
-        static void InitializeRun() {
+        static void InitializeRun()
+        {
             //InitializingFrameCounter++;
             InputData nextInput = new InputData();
 
@@ -209,7 +203,7 @@ namespace CelesteBot_2023
             }
             return tracker.GetEntity<Player>();
         }
-        
+
         public static void MInput_Update(On.Monocle.MInput.orig_Update original)
         {
             //if (IsInitializing)
@@ -226,10 +220,9 @@ namespace CelesteBot_2023
                 original();
                 return;
             }
-            
-            CurrentPlayer.Episode.IncrementFrames();
-            
-            
+
+
+
             try
             {
                 Player player = GetPlayer();
@@ -320,10 +313,21 @@ namespace CelesteBot_2023
             {
                 // We have an action waiting for us!
                 Action nextAction = ActionManager.GetNextAction();
+                // minimum of 4 frame buffer
+                CurrentPlayer.Episode.FramesUntilNextCalculation = nextAction.NumFramesBeforeNextUpdate + 4;
                 nextInput.UpdateData(nextAction);
                 inputPlayer.UpdateData(nextInput);
                 RunActionNextFrame = false;
+                LastAction = nextAction;
             }
+            if (CurrentPlayer.WaitingForRespawn) 
+            {
+                nextInput = new InputData();
+                inputPlayer.UpdateData(nextInput);
+
+            }
+
+            CurrentPlayer.Episode.IncrementFrames();
 
             if (CurrentPlayer.Episode.IsRewardFrame())
             {
@@ -336,12 +340,16 @@ namespace CelesteBot_2023
                 {
                     FirstReward = false;
                 }
-                else 
+                else
                 {
-                    double reward = CurrentPlayer.Episode.GetReward();
-                    if (Settings.TrainingEnabled)
+
+                    if (!CurrentPlayer.player.Dead )
                     {
-                        GameStateManager.AddReward(reward);
+                        double reward = CurrentPlayer.Episode.GetReward();
+                        if (Settings.TrainingEnabled)
+                        {
+                            GameStateManager.AddReward(reward);
+                        }
                     }
                     if (CurrentPlayer.Episode.FinishedLevel)
                     {
@@ -360,7 +368,7 @@ namespace CelesteBot_2023
                 }
                 // Give the API 1 frame to get the next action
                 RunActionNextFrame = true;
-                
+
             }
 
             original();
@@ -386,7 +394,7 @@ namespace CelesteBot_2023
             }
             else if (FrameLoops > 1 && FrameLoops < CelesteBotManager.FAST_MODE_MULTIPLIER && IsKeyDown(Keys.H))
             {
-               
+
                 FrameLoops += 1;
             }
             else if (FrameLoops > 1 && IsKeyDown(Keys.G))
@@ -457,7 +465,7 @@ namespace CelesteBot_2023
             {
                 ShowNothing = true;
             }
-            
+
             //if (state == State.Running)
             //{
             //    if (buffer > 0)
@@ -492,7 +500,7 @@ namespace CelesteBot_2023
                 {
 
                     original(self, gameTime);
-                    
+
                     //catch (NullReferenceException)
                     //{
                     //    // we're going tooo fast, so wait 10 milliseconds
@@ -500,13 +508,13 @@ namespace CelesteBot_2023
                     //    System.Threading.Thread.Sleep(20);
                     //}
                 }
-                    
+
             }
             else
             {
                 original(self, gameTime);
             }
-            }
+        }
         public static void OnScene_Transition(On.Celeste.Celeste.orig_OnSceneTransition original, Celeste.Celeste self, Scene last, Scene next)
         {
             original(self, last, next);

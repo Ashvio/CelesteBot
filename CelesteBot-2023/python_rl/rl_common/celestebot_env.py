@@ -20,13 +20,13 @@ class TerminationEvent(Enum):
 
 
 class CelesteEnv(gym.Env):
-    VISION_SIZE = 20
-    ENTITY_MAX_COUNT = 100
+    VISION_SIZE = 40
+    ENTITY_MAX_COUNT = 255
     MIN_SPEED = -1000
     MAX_SPEED = 1000
     MIN_POSITION = -50000
     MAX_POSITION = 50000
-    NOOP_ACTION = np.array([0, 0, 0, 0])
+    NOOP_ACTION = np.array([0, 0, 0, 0, 3])
 
     def __init__(self, action_queue=None, off_policy=False, logger=None):
         """
@@ -39,13 +39,17 @@ class CelesteEnv(gym.Env):
             NOOP
             Left
             Right
-        Jump/Dash: 3
+        Jump/Dash: 4
             NOOP
             Jump
+            Long jump
             Dash
         Climb: 2
             NOOP
             Climb
+        Number of frames between next action:
+            [4, 10] => 6 discrete plus 4
+
 
         Observation Space
         Vision: 2D array of entity objects, shape of 10 by 10 with 30 possibilities per entry
@@ -58,7 +62,7 @@ class CelesteEnv(gym.Env):
         """
         self.logger = logger
         self.off_policy = off_policy
-        self.action_space = spaces.MultiDiscrete([3, 3, 3, 2])
+        self.action_space = spaces.MultiDiscrete([3, 3, 4, 2, 5])
         shape = (self.VISION_SIZE, self.VISION_SIZE, 1)
 
         self.observation_space = spaces.Dict({

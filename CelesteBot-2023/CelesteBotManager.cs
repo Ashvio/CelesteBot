@@ -42,24 +42,16 @@ namespace CelesteBot_2023
         public static int ENTITY_CACHE_UPDATE_FRAMES = 10;
         public static int FAST_MODE_MULTIPLIER = 10;
 
-        // Moving Fitness Parameters
         public static float UPDATE_TARGET_THRESHOLD = 20; // Pixels in distance between the fitness target and the current position before considering it "reached"
 
-        public static Color GENE_POSITIVE_COLOR = Color.DarkGreen;
-        public static Color GENE_NEGATIVE_COLOR = Color.Red;
-        public static double THICKNESS_SCALE = 5; // How much the thickness increases per increase of 1 in the weight when drawing genes
-        public static int NODE_RADIUS = 10;
-        public static Vector2 NODE_LABEL_SCALE = new Vector2(0.2f, 0.2f);
         public static Vector2 TEXT_OFFSET = new Vector2(7, 7);
         // Graphing Parameters
         public static ArrayList SavedBestFitnesses = new ArrayList();
 
         // POPULATION PARAMETERS
-        public static int EXTINCTION_SAVE_TOP = 5; // How many species to save when a mass extinction occurs
         //public static int POPULATION_SIZE = 50;
 
-        public static int PLAYER_GRACE_BUFFER = 160; // How long between restarts should the next player be created, some arbitrary number of frames
-        public static double PLAYER_DEATH_TIME_BEFORE_RESET = 2; // How many seconds after a player dies should the next player be created and the last one deleted
+        public static double PLAYER_DEATH_TIME_BEFORE_RESET = 1; // How many seconds after a player dies should the next player be created and the last one deleted
 
         // Paths/Prefixes
 
@@ -128,21 +120,10 @@ namespace CelesteBot_2023
 
             UPDATE_TARGET_THRESHOLD = CelesteBotInteropModule.Settings.UpdateTargetThreshold;
 
-            GENE_POSITIVE_COLOR = Color.DarkGreen;
-            GENE_NEGATIVE_COLOR = Color.Red;
-            THICKNESS_SCALE = 5; // How much the thickness increases per increase of 1 in the weight when drawing genes
-            NODE_RADIUS = 10;
-            NODE_LABEL_SCALE = new Vector2(0.2f, 0.2f);
             TEXT_OFFSET = new Vector2(7, 7);
             // Graphing Parameters
             SavedBestFitnesses = new ArrayList();
-
-            // POPULATION PARAMETERS
-            EXTINCTION_SAVE_TOP = 5; // How many species to save when a mass extinction occurs
-            //POPULATION_SIZE = 50;
-
-            PLAYER_GRACE_BUFFER = 160; // How long between restarts should the next player be created, some arbitrary number of frames
-            PLAYER_DEATH_TIME_BEFORE_RESET = 4; // How many seconds after a player dies should the next player be created and the last one deleted
+            PLAYER_DEATH_TIME_BEFORE_RESET = 2; // How many seconds after a player dies should the next player be created and the last one deleted
             Log("Finished Initializing CelesteBot");
         }
 

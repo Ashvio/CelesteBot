@@ -48,6 +48,8 @@ namespace CelesteBot_2023
         public List<double> Rewards;
 
         public bool DeathFlag { get; private set; }
+        public object LastAction { get; internal set; }
+        public CameraManager cameraManager;
         public TrainingEpisode Episode;
 
         public CelestePlayer()
@@ -57,6 +59,7 @@ namespace CelesteBot_2023
 
             Rewards = new List<double>();
             Episode = new TrainingEpisode(this);
+            cameraManager = null;
         }
         bool CheckDeathTimer()
         {
@@ -80,6 +83,7 @@ namespace CelesteBot_2023
                 {
                     startPos = player.BottomCenter;
                 }
+                cameraManager = new CameraManager(this);
                 return true;
             }
             catch (NullReferenceException)
@@ -92,8 +96,13 @@ namespace CelesteBot_2023
         {
             Episode.Died = true;
             WaitingForRespawn = true;
-            CalculateGameState();
+            GameState gameState = new GameState(cameraManager.CameraVision, player, Episode);
+            
+            CelesteBotInteropModule.GameStateManager.AddObservation(gameState);
+            double reward = Episode.GetReward();
 
+            CelesteBotInteropModule.GameStateManager.AddReward(reward);
+            // CelesteBotInteropModule.ActionManager.Flush();
             if (!deathTimer.IsRunning)
             {
                 deathTimer.Start();
@@ -128,15 +137,19 @@ namespace CelesteBot_2023
                 SetDead();
                 return;
             }
-            UpdateVision();
+            //UpdateVision();
             Episode.UpdateTarget();
+            cameraManager.UpdateScreenVision();
 
             if (CelesteBotInteropModule.Settings.TrainingEnabled && !WaitingForRespawn)
             {
-                CalculateGameState();
+
+                GameState gameState = new GameState(cameraManager.CameraVision, player, Episode);
+                CelesteBotInteropModule.GameStateManager.AddObservation(gameState);
             }
-            if (Episode.NumFrames % 150 == 0)
+            if (Episode.NumFrames % 60 == 0)
             {
+                cameraManager.UpdateScreenVision();
                 //CelesteBotManager.Log(Vision2D.ToString());
             }
             //Look();
@@ -181,160 +194,8 @@ namespace CelesteBot_2023
             }
             VisionSetup = true;
         }
-        // 1 for tile (walls), -1 for entities (moving platforms, etc.)
-        // Might add more ex: -2 = dashblox, ... or new Nodes indicating type of entity/tile along with input box
-        private void UpdateVision()
-        {
-            int visionX = CelesteBotManager.VISION_2D_X_SIZE;
-            int visionY = CelesteBotManager.VISION_2D_Y_SIZE;
-            int underYIndex = visionY / 2 + 1;
-            int underXIndex = visionX / 2;
-            Level level;
-            try
-            {
-                level = (Level)Monocle.Engine.Scene;
-            }
-            catch (InvalidCastException)
-            {
-                // This means we tried to cast a LevelExit to a Level. It basically means we are dead.
-                //Dead = true;
-                // Wait for the timer to expire before actually resetting
-                return;
-            }
-            // TODO: Get Screen coordinates/position of madeline
-            // level.Camera:CameraToScreen(player.Position) 
-            //(you might also have to add / subtract level.Camera.Position to player.Position) 
-            CelesteBotManager.Log(level.Camera.ToString());
-            Vector2 tileUnder = TileFinder.GetTileXY(new Vector2(player.X, player.Y + 4));
-            //Logger.Log(CelesteBotInteropModule.ModLogKey, "Tile Under Player: (" + tileUnder.X + ", " + tileUnder.Y + ")");
-            //Logger.Log(CelesteBotInteropModule.ModLogKey, "(X,Y) Under Player: (" + player.X + ", " + (player.Y + 4) + ")");
-            // 1 = Air, 2 = Wall, 4 = Entity
+        
 
-            //MTexture[,] tiles = TileFinder.GetSplicedTileArray(visionX, visionY);
-            TileFinder.UpdateGrid();
-            TileFinder.CacheEntities();
-            for (int i = 0; i < visionY; i++)
-            {
-                for (int j = 0; j < visionX; j++)
-                {
-                    if (TileFinder.tileArray != null)
-                    {
-                        //if (TileFinder.tileArray[(int)(tileUnder.X - underXIndex + j), (int)(tileUnder.Y - underYIndex + i)] != null)
-                        //{
-                        //    Logger.Log(CelesteBotInteropModule.ModLogKey, TileFinder.tileArray[(int)(tileUnder.X - underXIndex + j), (int)(tileUnder.Y - underYIndex + i)].ToString());
-                        //}
-                    }
-                    /*int temp = TileFinder.IsSpikeAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i)) ? 8 : 1;
-                    if (temp == 1)
-                    {
-                        temp = TileFinder.IsWallAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i)) ? 2 : 1;
-                    }
-                    if (temp == 1)
-                    {
-                        temp = TileFinder.IsEntityAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i)) ? 4 : 1;
-                    }*/
-                    int obj = (int)TileFinder.GetEntityAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i));
-
-                    using (Py.GIL())
-                    {
-                        PyList list = new PyList();
-                        list.Append(new PyInt(obj));
-                        //dynamic np = Py.Import("numpy");
-                        Vision2D[i][j] = list;
-                    }
-                }
-            }
-        }
-        // Returns the convolution of the given kernel over the vision2d array with stride stride
-        //int[,] Convolve(int[,] vision2d, int[] kernel, int[] stride)
-        //{
-        /*
-         * 
-         * 
-(11/03/2023 00:04:13) [Everest] [Verbose] [celeste-bot] Camera:
-	Viewport: { 0, 0, 320, 180 } number of pixels on screen
-	Position: { 400, 4 } world coordinates originating TOP LEFT of screen
-	Origin: { 0, 0 } ?
-	Zoom: { 1, 1 } camera zoom
-	Angle: 0
-         * 
-         */
-        private void UpdateScreenVision()
-        {
-            int visionX = CelesteBotManager.VISION_2D_X_SIZE;
-            int visionY = CelesteBotManager.VISION_2D_Y_SIZE;
-            int underYIndex = visionY / 2 + 1;
-            int underXIndex = visionX / 2;
-            Level level;
-            try
-            {
-                level = (Level)Monocle.Engine.Scene;
-            }
-            catch (InvalidCastException)
-            {
-                // This means we tried to cast a LevelExit to a Level. It basically means we are dead.
-                //Dead = true;
-                // Wait for the timer to expire before actually resetting
-                return;
-            }
-            // TODO: Get Screen coordinates/position of madeline
-            // level.Camera:CameraToScreen(player.Position) 
-            //(you might also have to add / subtract level.Camera.Position to player.Position) 
-            CelesteBotManager.Log(level.Camera.ToString());
-            Vector2 tileUnder = TileFinder.GetTileXY(new Vector2(player.X, player.Y + 4));
-            //Logger.Log(CelesteBotInteropModule.ModLogKey, "Tile Under Player: (" + tileUnder.X + ", " + tileUnder.Y + ")");
-            //Logger.Log(CelesteBotInteropModule.ModLogKey, "(X,Y) Under Player: (" + player.X + ", " + (player.Y + 4) + ")");
-            // 1 = Air, 2 = Wall, 4 = Entity
-
-            //MTexture[,] tiles = TileFinder.GetSplicedTileArray(visionX, visionY);
-            TileFinder.UpdateGrid();
-            TileFinder.CacheEntities();
-            for (int i = 0; i < visionY; i++)
-            {
-                for (int j = 0; j < visionX; j++)
-                {
-                    if (TileFinder.tileArray != null)
-                    {
-                        //if (TileFinder.tileArray[(int)(tileUnder.X - underXIndex + j), (int)(tileUnder.Y - underYIndex + i)] != null)
-                        //{
-                        //    Logger.Log(CelesteBotInteropModule.ModLogKey, TileFinder.tileArray[(int)(tileUnder.X - underXIndex + j), (int)(tileUnder.Y - underYIndex + i)].ToString());
-                        //}
-                    }
-                    /*int temp = TileFinder.IsSpikeAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i)) ? 8 : 1;
-                    if (temp == 1)
-                    {
-                        temp = TileFinder.IsWallAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i)) ? 2 : 1;
-                    }
-                    if (temp == 1)
-                    {
-                        temp = TileFinder.IsEntityAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i)) ? 4 : 1;
-                    }*/
-                    int obj = (int)TileFinder.GetEntityAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i));
-
-                    using (Py.GIL())
-                    {
-                        PyList list = new PyList();
-                        list.Append(new PyInt(obj));
-                        //dynamic np = Py.Import("numpy");
-                        Vision2D[i][j] = list;
-                    }
-                }
-            }
-        }
-        //}
-        void CalculateGameState()
-        {
-
-            // Updates vision array with proper values each frame
-            /*
-            Inputs: PlayerX, PlayerY, PlayerXSpeed, PlayerYSpeed, <INPUTS FROM VISUALIZATION OF GAME>
-            IT IS ALSO POSSIBLE THAT X AND Y ARE UNNEEDED, AS THE VISUALIZATION INPUTS MAY BE ENOUGH
-            Outputs: U, D, L, R, Jump, Dash, Climb
-            If any of the outputs are above 0.7, apply them when returning controller output
-            */
-            GameState CurrentGameState = new GameState(Vision2D, player, Episode);
-            CelesteBotInteropModule.GameStateManager.AddObservation(CurrentGameState);
-        }
         // Updates controller inputs based on neural network output
 
         internal void KillPlayer()

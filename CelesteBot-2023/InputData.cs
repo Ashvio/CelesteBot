@@ -8,7 +8,6 @@ namespace CelesteBot_2023
         public static int LongJumpFrameCount = 20;
         public static int LongJumpRemainingTimer = 0;
         public static double LongJumpPersistentValue = 0;
-        public static int LastIndex = 0;
 
         public float MoveX;
         public float MoveY;
@@ -37,30 +36,20 @@ namespace CelesteBot_2023
             //this.QuickRestart = actions[5] > CelesteBotManager.ACTION_THRESHOLD;
             //LongJumpValue = actions[5];
             //bool LongJump = Math.Abs(actions[5]) > CelesteBotManager.ACTION_THRESHOLD;
-            //if (LongJumpRemainingTimer > 0 && CelesteBotInteropModule.CurrentPlayer.GetHashCode() == LastIndex)
-            //{
-            //    Jump = true;
-            //    LongJumpRemainingTimer--;
-            //    LongJumpValue = LongJumpPersistentValue;
-            //    //JumpValue = LongJumpPersistentValue;
-            //}
-            //else if (LongJumpRemainingTimer > 0)
-            //{
-            //    LongJumpRemainingTimer = 0;
-            //}
-            //else if (LongJump && LongJumpRemainingTimer == 0)
-            //{
-            //    Jump = true;
-            //    LongJumpRemainingTimer = LongJumpFrameCount;
-            //    LongJumpPersistentValue = LongJumpValue;
-            //    //JumpValue = LongJumpValue;
 
             //    LastIndex = CelesteBotInteropModule.CurrentPlayer.GetHashCode();
 
             //}
+            if (LongJumpRemainingTimer > 0)
+            {
+                Jump = true;
+                LongJumpRemainingTimer--;
+                //LongJumpValue = LongJumpPersistentValue;
+                //JumpValue = LongJumpPersistentValue;
+            }
         }
 
-        public InputData() { }
+            public InputData() { }
 
         
         public void UpdateData(Action action)
@@ -71,10 +60,23 @@ namespace CelesteBot_2023
 
             // + or - actions allow for buttons
             Jump = action.GetJump();
+            bool LongJump = action.GetLongJump();
             Dash = action.GetDash();
             Grab = action.GetGrab();
-
-            CelesteBotManager.Log("Move X: " + MoveX + " Move Y: " + MoveY + "\n Jump: " + Jump + " Dash: " + Dash + " Grab: " + Grab);
+            if (LongJumpRemainingTimer > 0)
+            {
+                Jump = true;
+                LongJumpRemainingTimer--;
+                //LongJumpValue = LongJumpPersistentValue;
+                //JumpValue = LongJumpPersistentValue;
+            }
+            else if (LongJump && LongJumpRemainingTimer == 0)
+            {
+                Jump = true;
+                LongJumpRemainingTimer = LongJumpFrameCount;
+                //LongJumpPersistentValue = LongJumpValue;
+                //JumpValue = LongJumpValue;
+            }
         }
         public bool ESC
         {
@@ -154,6 +156,8 @@ namespace CelesteBot_2023
                     Buttons |= (int)ButtonMask.Jump;
             }
         }
+
+
         public bool Dash
         {
             get

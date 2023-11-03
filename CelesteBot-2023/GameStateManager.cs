@@ -1,5 +1,4 @@
 ﻿using Celeste;
-using Celeste.Mod.CelesteBot_2023;
 using Microsoft.Xna.Framework;
 using Python.Runtime;
 using System.Collections.Concurrent;
@@ -30,11 +29,18 @@ namespace CelesteBot_2023
             CanDash = player.CanDash ? 1 : 0;
             // Reward
             //Reward = reward;
-            DeathFlag = episode.Died;
+            DeathFlag = player.Dead;
             FinishedLevel = episode.FinishedLevel;
             IsClimbing = episode.IsClimbing;
-            OnGround = player.OnGround(); 
-            ScreenPosition = CameraManager.CameraPosition;
+            if (!DeathFlag)
+            {
+                OnGround = player.OnGround();
+            }
+            else
+            {
+                OnGround = false;
+            }
+               ScreenPosition = CameraManager.CameraPosition;
             Target = new float[2] { episode.Target.X, episode.Target.Y };
         }
 
@@ -43,7 +49,7 @@ namespace CelesteBot_2023
     {
         BlockingCollection<GameState> GameStateQueue;
         BlockingCollection<double> RewardQueue;
-        public int NumSentObservations { get; set; }
+        public static int NumSentObservations { get; set; }
 
         public ExternalGameStateManager()
         {
@@ -53,7 +59,10 @@ namespace CelesteBot_2023
 
         public void AddObservation(GameState obs)
         {
-            GameStateQueue.Add(obs);
+            if (CelesteBotInteropModule.Settings.TrainingEnabled)
+            {
+                GameStateQueue.Add(obs);
+            }
         }
 
         public GameState PythonGetNextObservation()
