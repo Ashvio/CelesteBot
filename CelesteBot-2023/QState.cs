@@ -42,7 +42,7 @@ namespace CelesteBot_2023
                 }
                 return true;
             }
-            catch (IndexOutOfRangeException e)
+            catch (IndexOutOfRangeException)
             {
                 Logger.Log(CelesteBotInteropModule.ModLogKey, "THIS SHOULD NEVER HAPPEN!");
                 // Oh well...

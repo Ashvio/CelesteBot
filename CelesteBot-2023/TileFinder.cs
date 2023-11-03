@@ -24,6 +24,8 @@ namespace CelesteBot_2023
         Refill = 13,
         ChangeRespawnTrigger = 14,
         FallingBlock = 15,
+        IntroCar = 16,
+        IntroPavement = 17
     }
     public class TileFinder
     {
@@ -73,11 +75,11 @@ namespace CelesteBot_2023
                 tiles = celesteLevel.SolidTiles;
                 tileArray = tiles.Tiles.Tiles.ToArray();
             }
-            catch (NullReferenceException e)
+            catch (NullReferenceException)
             {
                 // level does not exist
             }
-            catch (InvalidCastException e)
+            catch (InvalidCastException)
             {
                 // level does not exist
             }
@@ -93,11 +95,11 @@ namespace CelesteBot_2023
             {
                 celesteLevel = (Level)Engine.Scene;
             }
-            catch (NullReferenceException e)
+            catch (NullReferenceException)
             {
                 // level does not exist
             }
-            catch (InvalidCastException e)
+            catch (InvalidCastException)
             {
                 // level does not exist
             }
@@ -123,11 +125,11 @@ namespace CelesteBot_2023
                 Vector2 tile = GetTileXY(realPos);
                 return tileArray[(int)tile.X, (int)tile.Y] != null;
             }
-            catch (NullReferenceException e)
+            catch (NullReferenceException)
             {
                 return false;
             }
-            catch (IndexOutOfRangeException e)
+            catch (IndexOutOfRangeException)
             {
                 return false;
             }
@@ -146,11 +148,11 @@ namespace CelesteBot_2023
                 }
                 return false;
             }
-            catch (NullReferenceException e)
+            catch (NullReferenceException)
             {
                 return false;
             }
-            catch (IndexOutOfRangeException e)
+            catch (IndexOutOfRangeException)
             {
                 return false;
             }
@@ -169,11 +171,11 @@ namespace CelesteBot_2023
                 }
                 return false;
             }
-            catch (NullReferenceException e)
+            catch (NullReferenceException)
             {
                 return false;
             }
-            catch (IndexOutOfRangeException e)
+            catch (IndexOutOfRangeException)
             {
                 return false;
             }
@@ -194,7 +196,7 @@ namespace CelesteBot_2023
                             Spikes s = (Spikes)entities[i];
                             return true;
                         }
-                        catch (InvalidCastException e)
+                        catch (InvalidCastException)
                         {
                             // Not a Spike at this tile
                             return false;
@@ -203,11 +205,11 @@ namespace CelesteBot_2023
                 }
                 return false;
             }
-            catch (NullReferenceException e)
+            catch (NullReferenceException)
             {
                 return false;
             }
-            catch (IndexOutOfRangeException e)
+            catch (IndexOutOfRangeException)
             {
                 return false;
             }
@@ -227,7 +229,7 @@ namespace CelesteBot_2023
                 }
                 return false;
             }
-            catch (NullReferenceException e)
+            catch (NullReferenceException)
             {
                 return false;
             }
@@ -288,7 +290,7 @@ namespace CelesteBot_2023
             {
                 celesteLevel = (Level)Engine.Scene;
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return;
             }

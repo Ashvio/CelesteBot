@@ -1,4 +1,8 @@
-﻿using System.Collections.Concurrent;
+﻿using Celeste.Mod;
+using Celeste.Mod.Helpers;
+using System;
+using System.Collections.Concurrent;
+using System.ComponentModel;
 
 namespace CelesteBot_2023
 {
@@ -36,10 +40,11 @@ namespace CelesteBot_2023
         LeftRightActionType LeftRightAction;
         SpecialMoveActionType SpecialMoveAction;
         GrabActionType grabAction;
+
         public Action(int[] action)
         {
             UpDownAction = (UpDownActionType)action[0];
-            LeftRightAction = (LeftRightActionType)action[0];
+            LeftRightAction = (LeftRightActionType)action[1];
 
             SpecialMoveAction = (SpecialMoveActionType)action[2];
             grabAction = (GrabActionType)action[3];
@@ -118,6 +123,8 @@ namespace CelesteBot_2023
     public class ExternalActionManager
     {
         BlockingCollection<Action> ActionQueue;
+        public int numRequestedActions { get; private set; }
+        public int numAvailableActions { get; private set; }
 
         public ExternalActionManager()
         {
@@ -127,11 +134,27 @@ namespace CelesteBot_2023
         public void PythonAddAction(int[] action)
         {
             ActionQueue.Add(new Action(action));
+            numAvailableActions++;
         }
 
         public Action GetNextAction()
         {
-            return ActionQueue.Take();
+            double start = DateTime.Now.TimeOfDay.TotalMilliseconds;
+            Action output;
+            numRequestedActions++;
+            bool success = ActionQueue.TryTake(out output, 5000);
+            if (!success)
+            {
+                CelesteBotManager.Log("Action retrieval timed out!", LogLevel.Error);
+                throw new TimeoutException("Action retrieval timed out!");
+            }
+            double end = DateTime.Now.TimeOfDay.TotalMilliseconds;
+            double total_time = end - start;
+            double frameCalculationTime = 1000 / (CelesteBotInteropModule.Settings.CalculationsPerSecond * CelesteBotInteropModule.FrameLoops);
+            if (total_time > frameCalculationTime) {
+                CelesteBotManager.Log("Action retrieval time too slow! " + total_time.ToString() + "Frame calculation time: " + frameCalculationTime , LogLevel.Info);
+            }
+            return output;
         }
     }
 }

@@ -5,7 +5,10 @@ using Monocle;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+using System.Runtime.CompilerServices;
 using System.Threading;
+using static CelesteBot_2023.CelesteBotInteropModule;
 /*
 * The selected code block belongs to the CelesteBotManager class and is found in the CelesteBotManager.cs file.
 This class contains various member variables that hold the configurations for the program as well as some utility 
@@ -40,7 +43,7 @@ namespace CelesteBot_2023
         public static int FAST_MODE_MULTIPLIER = 10;
 
         // Moving Fitness Parameters
-        public static float UPDATE_TARGET_THRESHOLD = 8; // Pixels in distance between the fitness target and the current position before considering it "reached"
+        public static float UPDATE_TARGET_THRESHOLD = 20; // Pixels in distance between the fitness target and the current position before considering it "reached"
 
         public static Color GENE_POSITIVE_COLOR = Color.DarkGreen;
         public static Color GENE_NEGATIVE_COLOR = Color.Red;
@@ -56,25 +59,13 @@ namespace CelesteBot_2023
         //public static int POPULATION_SIZE = 50;
 
         public static int PLAYER_GRACE_BUFFER = 160; // How long between restarts should the next player be created, some arbitrary number of frames
-        public static double PLAYER_DEATH_TIME_BEFORE_RESET = 3.5; // How many seconds after a player dies should the next player be created and the last one deleted
+        public static double PLAYER_DEATH_TIME_BEFORE_RESET = 2; // How many seconds after a player dies should the next player be created and the last one deleted
 
         // Paths/Prefixes
-        public static string ORGANISM_PATH = @"organismNames.txt";
-        public static string SPECIES_PATH = @"speciesNames.txt";
-        public static string CHECKPOINT_FILE_PATH = @"Checkpoints";
-        public static string CHECKPOINT_FILE_PREFIX = @"Checkpoints\checkpoint";
-        public static string QTableSavePath = @"QTable.tbl";
 
         public static bool Cutscene = false;
 
-        // Q Learning Variables
-        public static QState LastQState;
-        public static InputData LastQAction;
-        public static double LastQReward;
-        public static int QIterations = 0;
-        public static double MaxQReward = 0;
-        public static int QMaxRewardIteration = 0;
-
+        public static bool IsWorker { get; set; }
         // Q Learning Settings
 
         public static Thread PythonThread;
@@ -99,21 +90,33 @@ namespace CelesteBot_2023
         //        return null;
         //    }
         //}
+
         public static void Log(string message, LogLevel level = LogLevel.Verbose)
         {
-            Logger.Log(level, CelesteBotInteropModule.ModLogKey, message);
+            Logger.Log(level, ModLogKey, message);
         }
-
+        [Initialize]
         public static void Initialize()
         {
-            Logger.SetLogLevel(CelesteBotInteropModule.ModLogKey, LogLevel.Verbose);
-            Logger.Log(CelesteBotInteropModule.ModLogKey, "CELESTEBOT Initializing");
+            Logger.Log(ModLogKey, "CELESTEBOT Initializing");
 
             PythonManager.Setup();
+            string currentDir = Directory.GetCurrentDirectory();
+            if (currentDir.Contains("CelesteWorkers"))
+            {
+                IsWorker = true;
+                Logger.SetLogLevel(ModLogKey, LogLevel.Info);
+                CelesteBotInteropModule.Settings.TrainingEnabled = true;
+            }
+            else
+            {
+                IsWorker = false;
+                Logger.SetLogLevel(ModLogKey, LogLevel.Verbose);
+
+            }
 
             //PythonThread = new Thread(new ThreadStart(PythonManager.Initialize));
             //PythonThread.Start();
-            PythonManager.Initialize();
             ACTION_THRESHOLD = (float)(Convert.ToDouble(CelesteBotInteropModule.Settings.ActionThreshold) / 100.0); // The value that must be surpassed for the output to be accepted
 
 
@@ -206,12 +209,12 @@ namespace CelesteBot_2023
                         return true;
                     }
                 }
-                catch (InvalidCastException e)
+                catch (InvalidCastException)
                 {
                     // Game still hasn't finished loading...
                 }
             }
-            catch (NullReferenceException e)
+            catch (NullReferenceException)
             {
                 // Level or Player hasn't been setup yet. Just continue on for now.
             }
@@ -230,75 +233,10 @@ namespace CelesteBot_2023
         }
 
 
-        public static void DrawPlayer(CelestePlayer p)
-        {
-
-        }
-
-        public static void DrawGraph()
-        {
-
-        }
-
-        public static void DrawRewardGraph()
-        {
-
-        }
-
-        public static void DrawFitnessTarget(CelestePlayer player)
-        {
-            Vector2 target = player.Target;
-            if (target == null)
-            {
-                return;
-            }
-            Vector2 renderPos = target;
-
-            renderPos -= TileFinder.GetCelesteLevel().Camera.Position;
-            renderPos *= 6f;
-
-            Monocle.Draw.Circle(renderPos, CelesteBotInteropModule.Settings.UpdateTargetThreshold, Color.Yellow, 20);
-        }
-
-        static Dictionary<string, int> orgHash = new Dictionary<string, int>();
-        static Dictionary<string, int> speciesHash = new Dictionary<string, int>();
-        private static void FillHash(Dictionary<string, int> h, string path)
-        {
-            string[] strings = System.IO.File.ReadAllLines(path);
-            foreach (string s in strings)
-            {
-                h.Add(s, 0);
-            }
-        }
-        public static void FillOrganismHash(string path)
-        {
-            FillHash(orgHash, path);
-        }
-        public static void FillSpeciesHash(string path)
-        {
-            FillHash(speciesHash, path);
-        }
-        private static string GetUniqueName(Dictionary<string, int> dict)
-        {
-            Random rand = new Random(Guid.NewGuid().GetHashCode());
-            List<string> list = new List<string>(dict.Keys);
-            if (list.Count == 0)
-            {
-                return ""; // No values or keys
-            }
-            int index = rand.Next(list.Count);
-            string key = list[index];
-            string outp = key + dict[key];
-            dict[key]++;
-            return outp;
-        }
-        // These should all contain variables in the near future
 
 
-        public static void DrawStandard(CelestePlayer p)
-        {
 
-        }
+     
         public static void DrawDetails(CelestePlayer p)
         {
             Monocle.Draw.Rect(0f, 90f, 600f, 30f, Color.Black * 0.8f);
@@ -318,7 +256,7 @@ namespace CelesteBot_2023
                 Monocle.Draw.Rect(0f, 60f, 600f, 30f, Color.Black * 0.8f);
                 ActiveFont.Draw(level.Session.MapData.Filename + "_" + level.Session.Level + ": [" + player.BottomCenter.X + ", " + player.BottomCenter.Y + ", " + player.Speed.X + ", " + player.Speed.Y + "]", new Vector2(3, 60), Vector2.Zero, new Vector2(0.45f, 0.45f), Color.White);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 // Pass
             }

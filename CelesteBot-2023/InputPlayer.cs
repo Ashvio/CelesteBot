@@ -1,7 +1,11 @@
 ﻿using Celeste;
 using Celeste.Mod;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Input;
 using System;
+using static Celeste.Player.ChaserStateSound;
+using System.Collections.Generic;
+using Monocle;
 
 namespace CelesteBot_2023
 {
@@ -36,12 +40,12 @@ namespace CelesteBot_2023
                 newData.Dash = false;
                 newData.DashValue = 0;
             }
-            if ((LastData.GrabValue < 0 && newData.GrabValue > 0) || (newData.GrabValue < 0 && LastData.GrabValue > 0))
-            {
-                // Release for one frame
-                newData.Grab = false;
-                newData.GrabValue = 0;
-            }
+            //if ((LastData.GrabValue < 0 && newData.GrabValue > 0) || (newData.GrabValue < 0 && LastData.GrabValue > 0))
+            //{
+            //    // Release for one frame
+            //    newData.Grab = false;
+            //    newData.GrabValue = 0;
+            //}
             if ((LastData.LongJumpValue < 0 && newData.LongJumpValue > 0) || (newData.LongJumpValue < 0 && LastData.LongJumpValue > 0))
             {
                 // Release for one frame
@@ -89,6 +93,22 @@ namespace CelesteBot_2023
             Input.Initialize();
             Logger.Log(CelesteBotInteropModule.ModLogKey, "Unloading Input, (hopefully) returning input to player...");
             Game.Components.Remove(this);
+        }
+    }
+
+    public class KeyboardManager
+    {
+
+        public static void SetConfirm()
+        {
+
+            MInput.Keyboard.PreviousState = MInput.Keyboard.CurrentState;
+            Keys[] keys = new Keys[1]; 
+
+            keys[0] = Keys.NumPad0;
+            
+
+            MInput.Keyboard.CurrentState = new KeyboardState(keys);
         }
     }
 }

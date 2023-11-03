@@ -6,6 +6,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 /*
 * The CelestePlayer class represents the player in the game and is located in the same file as the CelesteBotInteropModule. 
 * It contains a Brain property which represents its neural network, a Fitness property to keep track of its performance in
@@ -25,7 +26,7 @@ namespace CelesteBot_2023
         Vector2 startPos = new Vector2(0, 0);
 
         public float Fitness = -1;
-        public double LastReward = 0;
+        public double LastEpisodeReward { get { return TrainingEpisode.LastEpisodeReward; } }
         private float AverageSpeed = 0;
         private float AverageStamina = 110;
         public float UnadjustedFitness;
@@ -48,14 +49,9 @@ namespace CelesteBot_2023
 
         public bool DeathFlag { get; private set; }
         public TrainingEpisode Episode;
-        internal double LastDistanceFromTarget;
 
         public CelestePlayer()
         {
-
-
-
-            
             timer = new Stopwatch();
             deathTimer = new Stopwatch();
 
@@ -118,7 +114,7 @@ namespace CelesteBot_2023
             }
             if (player == null)
             {
-               bool done = CheckPlayer();
+                bool done = CheckPlayer();
                 if (!done)
                 {
                     return;
@@ -134,11 +130,19 @@ namespace CelesteBot_2023
             }
             UpdateVision();
             Episode.UpdateTarget();
-            CalculateGameState();
+
+            if (CelesteBotInteropModule.Settings.TrainingEnabled && !WaitingForRespawn)
+            {
+                CalculateGameState();
+            }
+            if (Episode.NumFrames % 150 == 0)
+            {
+                //CelesteBotManager.Log(Vision2D.ToString());
+            }
             //Look();
             //Think();
 
-            
+
             /*need to incorporate y here, maybe dist to goal here as well*/
             // Compare to distance to fitness target
             if (player.Speed.Length() == 0 || (player.BottomCenter - Target).Length() >= (MaxPlayerPos - Target).Length() && !player.JustRespawned)
@@ -185,9 +189,10 @@ namespace CelesteBot_2023
             int visionY = CelesteBotManager.VISION_2D_Y_SIZE;
             int underYIndex = visionY / 2 + 1;
             int underXIndex = visionX / 2;
+            Level level;
             try
             {
-                Level level = (Level)Monocle.Engine.Scene;
+                level = (Level)Monocle.Engine.Scene;
             }
             catch (InvalidCastException)
             {
@@ -196,7 +201,10 @@ namespace CelesteBot_2023
                 // Wait for the timer to expire before actually resetting
                 return;
             }
-
+            // TODO: Get Screen coordinates/position of madeline
+            // level.Camera:CameraToScreen(player.Position) 
+            //(you might also have to add / subtract level.Camera.Position to player.Position) 
+            CelesteBotManager.Log(level.Camera.ToString());
             Vector2 tileUnder = TileFinder.GetTileXY(new Vector2(player.X, player.Y + 4));
             //Logger.Log(CelesteBotInteropModule.ModLogKey, "Tile Under Player: (" + tileUnder.X + ", " + tileUnder.Y + ")");
             //Logger.Log(CelesteBotInteropModule.ModLogKey, "(X,Y) Under Player: (" + player.X + ", " + (player.Y + 4) + ")");
@@ -226,11 +234,13 @@ namespace CelesteBot_2023
                         temp = TileFinder.IsEntityAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i)) ? 4 : 1;
                     }*/
                     int obj = (int)TileFinder.GetEntityAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i));
-                    
+
                     using (Py.GIL())
                     {
+                        PyList list = new PyList();
+                        list.Append(new PyInt(obj));
                         //dynamic np = Py.Import("numpy");
-                        Vision2D[j][i] = new PyInt(obj);
+                        Vision2D[i][j] = list;
                     }
                 }
             }
@@ -238,7 +248,79 @@ namespace CelesteBot_2023
         // Returns the convolution of the given kernel over the vision2d array with stride stride
         //int[,] Convolve(int[,] vision2d, int[] kernel, int[] stride)
         //{
+        /*
+         * 
+         * 
+(11/03/2023 00:04:13) [Everest] [Verbose] [celeste-bot] Camera:
+	Viewport: { 0, 0, 320, 180 } number of pixels on screen
+	Position: { 400, 4 } world coordinates originating TOP LEFT of screen
+	Origin: { 0, 0 } ?
+	Zoom: { 1, 1 } camera zoom
+	Angle: 0
+         * 
+         */
+        private void UpdateScreenVision()
+        {
+            int visionX = CelesteBotManager.VISION_2D_X_SIZE;
+            int visionY = CelesteBotManager.VISION_2D_Y_SIZE;
+            int underYIndex = visionY / 2 + 1;
+            int underXIndex = visionX / 2;
+            Level level;
+            try
+            {
+                level = (Level)Monocle.Engine.Scene;
+            }
+            catch (InvalidCastException)
+            {
+                // This means we tried to cast a LevelExit to a Level. It basically means we are dead.
+                //Dead = true;
+                // Wait for the timer to expire before actually resetting
+                return;
+            }
+            // TODO: Get Screen coordinates/position of madeline
+            // level.Camera:CameraToScreen(player.Position) 
+            //(you might also have to add / subtract level.Camera.Position to player.Position) 
+            CelesteBotManager.Log(level.Camera.ToString());
+            Vector2 tileUnder = TileFinder.GetTileXY(new Vector2(player.X, player.Y + 4));
+            //Logger.Log(CelesteBotInteropModule.ModLogKey, "Tile Under Player: (" + tileUnder.X + ", " + tileUnder.Y + ")");
+            //Logger.Log(CelesteBotInteropModule.ModLogKey, "(X,Y) Under Player: (" + player.X + ", " + (player.Y + 4) + ")");
+            // 1 = Air, 2 = Wall, 4 = Entity
 
+            //MTexture[,] tiles = TileFinder.GetSplicedTileArray(visionX, visionY);
+            TileFinder.UpdateGrid();
+            TileFinder.CacheEntities();
+            for (int i = 0; i < visionY; i++)
+            {
+                for (int j = 0; j < visionX; j++)
+                {
+                    if (TileFinder.tileArray != null)
+                    {
+                        //if (TileFinder.tileArray[(int)(tileUnder.X - underXIndex + j), (int)(tileUnder.Y - underYIndex + i)] != null)
+                        //{
+                        //    Logger.Log(CelesteBotInteropModule.ModLogKey, TileFinder.tileArray[(int)(tileUnder.X - underXIndex + j), (int)(tileUnder.Y - underYIndex + i)].ToString());
+                        //}
+                    }
+                    /*int temp = TileFinder.IsSpikeAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i)) ? 8 : 1;
+                    if (temp == 1)
+                    {
+                        temp = TileFinder.IsWallAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i)) ? 2 : 1;
+                    }
+                    if (temp == 1)
+                    {
+                        temp = TileFinder.IsEntityAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i)) ? 4 : 1;
+                    }*/
+                    int obj = (int)TileFinder.GetEntityAtTile(new Vector2(tileUnder.X - underXIndex + j, tileUnder.Y - underYIndex + i));
+
+                    using (Py.GIL())
+                    {
+                        PyList list = new PyList();
+                        list.Append(new PyInt(obj));
+                        //dynamic np = Py.Import("numpy");
+                        Vision2D[i][j] = list;
+                    }
+                }
+            }
+        }
         //}
         void CalculateGameState()
         {
@@ -250,14 +332,9 @@ namespace CelesteBot_2023
             Outputs: U, D, L, R, Jump, Dash, Climb
             If any of the outputs are above 0.7, apply them when returning controller output
             */
-            double reward = Episode.GetReward();
-            GameState CurrentGameState = new GameState(Vision2D, player.Speed.X, player.Speed.Y, player.Stamina, player.CanDash, reward, Episode.Died, Episode.FinishedLevel);
+            GameState CurrentGameState = new GameState(Vision2D, player, Episode);
             CelesteBotInteropModule.GameStateManager.AddObservation(CurrentGameState);
-            if (Episode.FinishedLevel || Episode.Died)
-            {
-                Episode.ResetEpisode();
-            }
-         }
+        }
         // Updates controller inputs based on neural network output
 
         internal void KillPlayer()

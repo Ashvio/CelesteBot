@@ -25,7 +25,9 @@ import argparse
 import logging
 import os
 import pathlib
+import random
 import shutil
+from datetime import datetime
 
 import ray
 from ray import tune, air
@@ -33,8 +35,10 @@ from ray.rllib.algorithms.ppo import PPOConfig
 from ray.rllib.env.policy_server_input import PolicyServerInput
 from ray.rllib.evaluation.collectors.sample_collector import SampleCollector
 from ray.rllib.examples.custom_metrics_and_callbacks import MyCallbacks
+from ray.tune import sample_from, run
 from ray.tune.logger import pretty_print
 from ray.tune.registry import get_trainable_cls
+from ray.tune.schedulers.pb2 import PB2
 
 from python_rl.rl_common.celestebot_env import CelesteEnv
 
@@ -45,6 +49,18 @@ SERVER_ADDRESS = "127.0.0.1"
 SERVER_BASE_PORT = 9900  # + worker-idx - 1
 CHECKPOINT_BASE_PATH = "checkpoints"
 LAST_CHECKPOINT_FILE = "checkpoints/last_checkpoint.out"
+
+
+# Postprocess the perturbed config to ensure it's still valid used if PBT.
+def explore(config):
+    # Ensure we collect enough timesteps to do sgd.
+    if config["train_batch_size"] < config["sgd_minibatch_size"] * 2:
+        config["train_batch_size"] = config["sgd_minibatch_size"] * 2
+    # Ensure we run at least one sgd iter.
+    if config["lambda"] > 1:
+        config["lambda"] = 1
+    config["train_batch_size"] = int(config["train_batch_size"])
+    return config
 
 
 def get_cli_args():
@@ -81,6 +97,8 @@ def get_cli_args():
     # General args.
 
     parser.add_argument("--num-cpus", type=int, default=8)
+    parser.add_argument("--resume-checkpoint", type=str)
+
     parser.add_argument(
         "--framework",
         choices=["tf", "tf2", "torch"],
@@ -113,7 +131,7 @@ def get_cli_args():
         "--no-tune",
         action="store_true",
         help="Run without Tune using a manual train loop instead. Here,"
-        "there is no TensorBoard support.",
+             "there is no TensorBoard support.",
     )
     # parser.add_argument(
     #     "--local-mode",
@@ -124,6 +142,8 @@ def get_cli_args():
     args = parser.parse_args()
     print(f"Running with following CLI args: {args}")
     return args
+
+NUM_WORKERS = 4
 
 
 if __name__ == "__main__":
@@ -141,24 +161,41 @@ if __name__ == "__main__":
                 ioctx,
                 SERVER_ADDRESS,
                 args.port + ioctx.worker_index - (1 if ioctx.worker_index > 0 else 0),
-                idle_timeout=0.025
+                idle_timeout=0.025,
+                max_sample_queue_size=20000
             )
         # No InputReader (PolicyServerInput) needed.
         else:
             return None
 
 
+    pb2 = PB2(
+        time_attr="timesteps_total",
+        metric="episode_reward_mean",
+        mode="max",
+        perturbation_interval=50000,
+        quantile_fraction=0.25,  # copy bottom % with top %
+        # Specifies the hyperparam search space
+        hyperparam_bounds={
+            "lambda": [0.9, 1.0],
+            "clip_param": [0.1, 0.5],
+            "lr": [1e-5, 1e-3],
+            "train_batch_size": [1000, 60000],
+        },
+    )
     env = CelesteEnv(None)
 
     # Algorithm config. Note that this config is sent to the client only in case
     # the client needs to create its own policy copy for local inference.
-    NUM_WORKERS = 1
     config = (
         PPOConfig()
         # Indicate that the Algorithm we setup here doesn't need an actual env.
         # Allow spaces to be determined by user (see below).
         .rl_module(_enable_rl_module_api=False)
-        .training(_enable_learner_api=False)
+        .training(
+            _enable_learner_api=False,
+            # lr=tune.grid_search([0.01, 0.001, 0.0001])
+        )
         .environment(
             env=None,
             # TODO: (sven) make these settings unnecessary and get the information
@@ -170,40 +207,66 @@ if __name__ == "__main__":
         # DL framework to use.
 
         .framework("torch")
-        .resources(num_cpus_per_worker=4, local_gpu_idx=0, num_gpus_per_worker=0.1)
-        # .num_gpus(1)
+        .resources(
+            num_cpus_per_worker=18 // NUM_WORKERS,
+            # local_gpu_idx=0,
+            num_cpus_for_local_worker=4,
+            # num_cpus_per_learner_worker=1,
+            num_gpus_per_learner_worker=0.2,
+            num_gpus_per_worker=0.8/ NUM_WORKERS,
+            # num_gpus=1,
+        )
         # Create a "chatty" client/server or not.
         # .callbacks(MyCallbacks if args.callbacks_verbose else None)
         # Use the `PolicyServerInput` to generate experiences.
         .offline_data(input_=_input, offline_sampling=False, shuffle_buffer_size=0)
         # Use n worker processes to listen on different ports.
         .rollouts(
-            num_rollout_workers=1,
+            num_rollout_workers=NUM_WORKERS,
             # Connectors are not compatible with the external env.
             enable_connectors=False,
-            create_env_on_local_worker=True,
+            # create_env_on_local_worker=True,
             # batch_mode="truncate_episodes",
-            rollout_fragment_length=1000,
-            remote_env_batch_wait_ms=0,
+            # rollout_fragment_length='auto',
+            remote_env_batch_wait_ms=20,
+            # remote_worker_envs=True,
+            # num_envs_per_worker=3
         )
         # Disable OPE, since the rollouts are coming from online clients.
         .evaluation(off_policy_estimation_methods={})
         # Set to INFO so we'll see the server's actual address:port.
         .debugging(log_level="INFO")
     )
-
+    lr_start = 2.5e-3
+    lr_end = 2.5e-5
+    lr_time = 50 * 1000000
     # Example of using PPO (does NOT support off-policy actions).
     config.update_from_dict(
         {
-            "train_batch_size": 4000,
-            "model": {"use_lstm": False},
-            "count_steps_by": "env_steps"
+            # "num_cpus": 22,
+            # "num_workers": 0,
+            "model": {
+                "use_lstm": False,
+                "use_attention": True,
+                "dim": CelesteEnv.VISION_SIZE,
+                "conv_filters": [[16, [3, 3], 2], [32, [3, 3], 2], [64, [4, 4], 1]],
+                # "entropy_coeff_schedule": [[0, 1e-3]]
+            },
+            "entropy_coeff": 1e-2,
+            "count_steps_by": "env_steps",
+            "num_sgd_iter": 10,
+            "sgd_minibatch_size": 100,
+            "lambda": sample_from(lambda spec: random.uniform(0.9, 1.0)),
+            "clip_param": sample_from(lambda spec: random.uniform(0.2, 0.4)),
+            "lr": sample_from(lambda spec: random.uniform(1e-3, 1e-5)),
+            "train_batch_size": sample_from(lambda spec: random.randint(100, 500)),
+            # "normalize_actions": False
         }
     )
 
     # Attempt to restore from checkpoint, if possible.
     # Attempt to restore from checkpoint, if possible.
-    checkpoint_path  = ""
+    checkpoint_path = ""
 
     if not args.no_restore and os.path.exists(LAST_CHECKPOINT_FILE):
         checkpoint_path = open(LAST_CHECKPOINT_FILE).read()
@@ -221,7 +284,6 @@ if __name__ == "__main__":
 
         # Serving and training loop.
         ts = 0
-
 
         while True:
 
@@ -251,10 +313,18 @@ if __name__ == "__main__":
             "training_iteration": 1e9,
             "episode_reward_mean": 10000,
         }
-        logging.getLogger('requests').setLevel(logging.CRITICAL)
+        logging.getLogger('requests').setLevel(logging.WARN)
         # TODO: Figure out why connections keep closing (HTTP BaseHandler is 1.0 not 1.1)
-        logging.getLogger('urllib3.connectionpool').setLevel(logging.CRITICAL)
-        logging.getLogger('urllib3').setLevel(logging.CRITICAL)
-        tune.Tuner(
-            "PPO", param_space=config, run_config=air.RunConfig(stop=stop, verbose=2)
-        ).fit()
+        logging.getLogger('urllib3.connectionpool').setLevel(logging.WARN)
+        logging.getLogger('urllib3').setLevel(logging.WARN)
+        # tune.Tuner.restocre(r"C:\Users\Ashvin\ray_results\PPO_2023-11-01_00-23-59","PPO", param_space=config,).fit()
+        if args.resume_checkpoint:
+            analysis = run(
+                "PPO", config=config, stop=stop, verbose=1, resume=True, name=args.resume_checkpoint,
+            )
+        else:
+            time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            analysis = run(
+                "PPO", config=config, stop=stop, verbose=1,
+                name=f"CelesteBot_{time}"
+            )

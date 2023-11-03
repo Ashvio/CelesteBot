@@ -3,11 +3,16 @@ using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
+using static CelesteBot_2023.CelesteBotInteropModule;
 
 namespace CelesteBot_2023
 {
     public class PythonManager
     {
+        static Thread actionConsumerThread;
+        static Thread observationProducerThread;
+        static Thread trainingLoop;
+        static Thread rewardQueueProducer;
         public static void Setup()
         {
             // virtual env setup
@@ -25,6 +30,17 @@ namespace CelesteBot_2023
             string libPackages = Path.Combine(pathToVirtualEnv, "Lib");
             Environment.SetEnvironmentVariable("PYTHONPATH", $@"{libSitePackages};{libPackages}", EnvironmentVariableTarget.Process);
         }
+        [Unload]
+        public static void Unload()
+        {
+            //trainingLoop.Interrupt();
+            //rewardQueueProducer.Interrupt();
+            //actionConsumerThread.Interrupt();
+            //observationProducerThread.Interrupt();
+            PythonEngine.Shutdown();
+        }
+
+        [Initialize]
         public static void Initialize()
         {
             // Configure PythonNET interoperability using a python virtual env.
@@ -32,9 +48,7 @@ namespace CelesteBot_2023
             CelesteBotManager.Log("PYTHON Initializing");
             PythonEngine.Initialize();
             PythonEngine.BeginAllowThreads();
-            Thread ActionConsumerThread;
-            Thread ObservationProducerThread;
-            Thread TrainingLoop;
+            
             using (Py.GIL())
             {
                 dynamic queue = Py.Import("queue"); // import the queue module
@@ -45,26 +59,30 @@ namespace CelesteBot_2023
                 dynamic py_queue = queue.Queue();
 
                 dynamic python_celeste_client = rl_client.CelesteClient(py_queue);
-                ActionConsumerThread = new Thread(() => ActionQueueConsumer(py_queue));
-                ActionConsumerThread.Name = "ActionConsumer";
-                ObservationProducerThread = new Thread(() => ObservationQueueProducer(python_celeste_client));
-                ObservationProducerThread.Name = "ObservationProducer";
-                TrainingLoop = new Thread(() => RunTrainingLoop(python_celeste_client));
-                TrainingLoop.Name = "TrainingLoop";
+                actionConsumerThread = new Thread(() => ActionQueueConsumer(py_queue));
+                actionConsumerThread.Name = "ActionConsumer";
+                observationProducerThread = new Thread(() => ObservationQueueProducer(python_celeste_client));
+                observationProducerThread.Name = "ObservationProducer";
+                trainingLoop = new Thread(() => RunTrainingLoop(python_celeste_client));
+                trainingLoop.Name = "TrainingLoop";
+
+                rewardQueueProducer = new Thread(() => RewardQueueProducer(python_celeste_client));
+                rewardQueueProducer.Name = "RewardProducer";
                 CelestePlayer.Vision2D = new PyList();
                 for (int i = 0; i < CelesteBotManager.VISION_2D_X_SIZE; i++)
                 {
                     PyList sublist = new PyList();
                     for (int j = 0; j < CelesteBotManager.VISION_2D_Y_SIZE; j++)
                     {
-                        sublist.Append(new PyInt((int)0));
+                        sublist.Append(new PyInt(0));
                     }
                     CelestePlayer.Vision2D.Append(sublist);
                 }
             }
-            ActionConsumerThread.Start();
-            ObservationProducerThread.Start();
-            TrainingLoop.Start();
+            actionConsumerThread.Start();
+            observationProducerThread.Start();
+            trainingLoop.Start();
+            rewardQueueProducer.Start();
             CelesteBotManager.Log("Python Finished Initializing");
 
         }
@@ -102,7 +120,21 @@ namespace CelesteBot_2023
             }
 
         }
+        static void RewardQueueProducer(dynamic python_celeste_client)
+        {
+            // Sends Rewards to Python client
+            CelesteBotManager.Log("Py Reward Producer Loop Initializing");
 
+            while(true)
+            {
+                double reward = CelesteBotInteropModule.GameStateManager.PythonGetNextReward();
+
+                using (Py.GIL())
+                {
+                    python_celeste_client.ext_add_reward(reward);
+                }
+            }
+        }
         static void ObservationQueueProducer(dynamic python_celeste_client)
         {
             // Sends Observations of Game State to Python client
@@ -119,12 +151,18 @@ namespace CelesteBot_2023
                 {
                     PyObject stamina = obs.Stamina.ToPython();
                     PyList speed = ToPyList(obs.Speed);
+                    PyList target = ToPyList(obs.Target);
+                    PyList position = ToPyList(obs.Position);
+                    PyList screenPosition = ToPyList(obs.ScreenPosition);
+
                     PyObject canDash = obs.CanDash.ToPython();
-                    PyObject reward = obs.Reward.ToPython();
+                    //PyObject reward = obs.Reward.ToPython();
                     PyObject deathFlag = obs.DeathFlag.ToPython();
                     PyObject finishedLevel = obs.FinishedLevel.ToPython();
+                    PyObject isClimbing = obs.IsClimbing.ToPython();
+                    PyObject onGround = obs.OnGround.ToPython();
 
-                    python_celeste_client.ext_add_observation(obs.Vision, speed, canDash, stamina, reward, deathFlag, finishedLevel);
+                    python_celeste_client.ext_add_observation(obs.Vision, speed, canDash, stamina, deathFlag, finishedLevel, target, position, screenPosition, isClimbing, onGround);
 
                 }
             }

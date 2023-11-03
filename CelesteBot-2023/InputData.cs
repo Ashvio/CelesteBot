@@ -61,6 +61,8 @@ namespace CelesteBot_2023
         }
 
         public InputData() { }
+
+        
         public void UpdateData(Action action)
         {
             //when using a keyboard, Input.MoveX.Value is -1 when pressing left, 1 when pressing right, 0 otherwise. (same applies for Input.MoveY.Value)
@@ -71,6 +73,8 @@ namespace CelesteBot_2023
             Jump = action.GetJump();
             Dash = action.GetDash();
             Grab = action.GetGrab();
+
+            CelesteBotManager.Log("Move X: " + MoveX + " Move Y: " + MoveY + "\n Jump: " + Jump + " Dash: " + Dash + " Grab: " + Grab);
         }
         public bool ESC
         {

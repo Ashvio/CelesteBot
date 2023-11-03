@@ -1,7 +1,7 @@
 {
   "profiles": {
     "CelesteBot-2023": {
-      "commandName": "celeste.exe",
+      "commandName": "Executable",
       "workingDirectory": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Celeste"
     },
     "CelesteDebugger": {
