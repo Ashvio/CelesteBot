@@ -39,7 +39,9 @@
 		</Reference>
     </ItemGroup>
 
-
+    <Target Name="BeforeBuild">
+      <Exec Command='kill $(pgrep -f "$(CelestePrefix)\Celeste.exe\)"' />
+    </Target>
     <Target Name="CopyFiles" AfterTargets="Build">
         <Copy SourceFiles="$(OutputPath)\$(AssemblyName).dll" DestinationFolder="$(CelestePrefix)\Mods\CelesteBot\Code" />
         <Copy SourceFiles="$(OutputPath)\$(AssemblyName).pdb" DestinationFolder="$(CelestePrefix)\Mods\CelesteBot\Code" />

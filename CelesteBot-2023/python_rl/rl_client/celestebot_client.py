@@ -41,6 +41,7 @@ import argparse
 import logging
 import math
 import os
+import pickle
 import queue
 import re
 import threading
@@ -48,7 +49,7 @@ import time
 import traceback
 from collections import OrderedDict
 from threading import Thread
-from typing import List, SupportsFloat
+from typing import List, SupportsFloat, Optional
 import socket, errno
 from urllib.error import HTTPError
 
@@ -117,7 +118,9 @@ class CelesteClient:
         self.python_logs_txt = "python_logs.txt"
         logging.basicConfig(filename=self.python_logs_txt,
                             filemode='w+',
-                            datefmt='%H:%M:%S')
+                            datefmt='%H:%M:%S',
+                            level=logging.INFO,
+                            )
         self.logger = logging.getLogger('PythonClientLogger')
         self.logger.log(logging.INFO, "Python client started")
         session = requests.Session()
@@ -133,14 +136,19 @@ class CelesteClient:
             # base Celeste game
             self.is_worker = False
             worker_number = 0
-        num_client_workers = 4
+        num_client_workers = int(os.environ.get("NUM_CLIENT_WORKERS", 4))
         num_server_workers = celestebot_server.NUM_WORKERS
-        num_clients_per_server = num_client_workers // num_server_workers
+        num_clients_per_server = max(num_client_workers // num_server_workers, 1)
         server_number = worker_number // num_clients_per_server
+        self.logger.log(logging.INFO, f"Worker number: {worker_number}")
+        self.logger.log(logging.INFO, f"Num client workers: {num_client_workers}")
+        self.logger.log(logging.INFO, f"Num server workers: {num_server_workers}")
+        self.logger.log(logging.INFO, f"Num clients per server: {num_clients_per_server}")
+        self.logger.log(logging.INFO, f"Assigned Server number: {server_number}")
         if server_number >= num_server_workers:
             server_number -= 1
         port = 9900 + server_number
-        self.logger.log( logging.INFO, f"Connecting to port {port}")
+        self.logger.log(logging.INFO, f"Connecting to port {port}")
         # port = 9900
         self.client = PolicyClient(
             f"http://127.0.0.1:{port}", inference_mode="remote", session=session
@@ -178,19 +186,14 @@ class CelesteClient:
         observation["map_entities_vision"] = np.array(vision)
         observation["on_ground"] = np.array([on_ground])
         observation["position"] = np.array(position)
-        observation["screen_position"] = np.array(screen_position)
+        # observation["screen_position"] = np.array(screen_position)
 
         observation["speed_x_y"] = np.array(speed_x_y)
         observation["stamina"] = np.array([stamina])
         observation["target"] = np.array(target)  # array of x,y coord
 
         self.env.observation_queue.put(observation)
-        # if self._first_reward:
-        #     # we get rewards from the current game state, so we don't want to send the last reward from the previous game state
-        #     self._first_reward = False
-        #     # self.env.reward_queue.put(0.0)
-        # else:
-        #     self.env.reward_queue.put(last_reward)
+
         if death_flag:
             self.env.termination_event_queue.put(TerminationEvent.DEATH)
         elif finished_level:
@@ -204,9 +207,8 @@ class CelesteClient:
     def ext_get_action(self):
         # send action to .NET
         # time how long this takes:
-        action = self.client.get_action(self.current_episode_id, self.env.observation_queue.get())
-        if len(action) < 5:
-            self.logger.log(logging.ERROR, f"Action is too short: {action}")
+        nest_obs = self.env.observation_queue.get()
+        action = self.client.get_action(self.current_episode_id, nest_obs)
         return [int(x) for x in action.tolist()]
 
     def log_rewards(self):
@@ -256,11 +258,13 @@ class CelesteClient:
 
                 obs, reward, terminated, truncated, info = self.env.step(action)
                 self.awaiting_rewards += 1
-                if action_count % 100 == 0:
+                if action_count % 1 == 0:
                     self.logger.log(logging.DEBUG, f"Reward for Action {action}: {reward}")
+                    # self.logger.log(logging.DEBUG, f"Observation: {obs}")
 
                 self.client.log_returns(self.current_episode_id, np.float64(reward))
                 self.episode_rewards += reward
+
                 # Log next-obs, rewards, and infos.
                 # self.info_queue.put(info)
                 # self.log_reward()
@@ -274,7 +278,6 @@ class CelesteClient:
                     end_time = time.time()
                     self.logger.log(logging.INFO,
                                     f"Episode took {end_time - start_time} seconds and  {action_count / (end_time - start_time)} actions per second")
-                    self.logger.log(logging.INFO, f"info queue size: {self.info_queue.qsize()}")
                     # self.info_queue.join()
 
                     start_time = time.time()
@@ -284,7 +287,6 @@ class CelesteClient:
                     # End the old episode.
                     self.client.end_episode(self.current_episode_id, obs)
                     # Tell Madeline to do nothing to get the next observation
-                    self.env.add_action(self.env.NOOP_ACTION)
                     # Start a new episode.
                     obs, info = self.env.reset()
                     self.current_episode_id = self.client.start_episode(training_enabled=True)
@@ -292,3 +294,132 @@ class CelesteClient:
             with open(self.python_logs_txt, 'a') as f:
                 f.write(str(e))
                 f.write(traceback.format_exc())
+
+
+from enum import Enum
+
+
+class UpDownActionType(Enum):
+    NOOP = 0
+    Up = 1
+    Down = 2
+
+
+class LeftRightActionType(Enum):
+    NOOP = 0
+    Left = 1
+    Right = 2
+
+
+class SpecialMoveActionType(Enum):
+    NOOP = 0
+    Jump = 1
+    LongJump = 2
+    Dash = 3
+
+
+class GrabActionType(Enum):
+    NOOP = 0
+    Grab = 1
+
+
+class StepAction:
+
+    def __init__(self, ):
+        self.up_down_action = UpDownActionType.NOOP  # type: UpDownActionType
+        self.left_right_action = LeftRightActionType.NOOP  # type: LeftRightActionType
+        self.special_move_action = SpecialMoveActionType.NOOP  # type: SpecialMoveActionType
+        self.grab_action = GrabActionType.NOOP  # type: GrabActionType
+
+    def build(self) -> np.array:
+        return np.array([self.up_down_action.value, self.left_right_action.value, self.special_move_action.value,
+                         self.grab_action.value])
+
+
+class DummyCelesteClient(CelesteClient):
+    dummy_actions = [
+        np.array([0, 1, 1, 0]),
+    ]
+
+    def __init__(self, action_queue):
+        super().__init__(action_queue)
+        self.num_requests = None
+        self.actions = pickle.load(open("python_rl/simulated_input.pkl", "rb"))
+
+    def start_training(self):
+        while self.actions:
+            if self.num_requests == 0:
+                time.sleep(0.05)
+                continue
+            action = self.actions.pop(0)
+            self.env.add_action(action)
+
+    def ext_get_action(self):
+        # send action to .NET
+        # time how long this takes:
+        self.num_requests += 1
+        action = self.env.action_queue.get()
+        self.num_requests -= 1
+
+        return action
+
+    def ext_add_reward(self, reward):
+        self.logger.log(logging.INFO, f"Reward: {reward}")
+
+    def ext_add_observation(self, vision, speed_x_y, can_dash, stamina, death_flag, finished_level, target, position,
+                            screen_position, is_climbing, on_ground):
+
+        pass
+
+
+def record_simulated_input():
+    actions = []
+    import pygame
+
+    pygame.init()
+    window = pygame.display.set_mode((300, 300))
+    pygame.display.set_caption("Press keys to record actions")
+    clock = pygame.time.Clock()
+    clock.tick(60)
+
+    while len(actions) < 100:
+        clock.tick(5)
+        window.fill(0)
+        pygame.display.flip()
+        pressed_keys = pygame.key.get_pressed()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                return
+
+            if event.type != pygame.KEYDOWN:
+                continue
+
+        current_action = StepAction()
+        if pressed_keys[pygame.K_w]:
+            current_action.up_down_action = UpDownActionType.Up
+        elif pressed_keys[pygame.K_s]:
+            current_action.up_down_action = UpDownActionType.Down
+        if pressed_keys[pygame.K_a]:
+            current_action.left_right_action = LeftRightActionType.Left
+        elif pressed_keys[pygame.K_d]:
+            current_action.left_right_action = LeftRightActionType.Right
+        if pressed_keys[pygame.K_j]:
+            current_action.special_move_action = SpecialMoveActionType.Jump
+        elif pressed_keys[pygame.K_i]:
+            current_action.special_move_action = SpecialMoveActionType.LongJump
+        elif pressed_keys[pygame.K_k]:
+            current_action.special_move_action = SpecialMoveActionType.Dash
+        if pressed_keys[pygame.K_LSHIFT]:
+            current_action.grab_action = GrabActionType.Grab
+        action = current_action.build()
+        if [int(x) for x in action.tolist()] == [0,0,0,0]:
+            continue
+        print(action)
+        actions.append(action)
+    pickle.dump(actions, open("simulated_input.pkl", "wb"))
+    pygame.quit()
+
+
+if __name__ == "__main__":
+    record_simulated_input()

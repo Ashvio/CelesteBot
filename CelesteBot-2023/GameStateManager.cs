@@ -19,7 +19,7 @@ namespace CelesteBot_2023
         public float CanDash { get; }
         public float[] ScreenPosition { get; internal set; }
 
-        public GameState(PyList vision, Player player, TrainingEpisode episode)
+        public GameState(PyList vision, Player player, TrainingEpisodeState episode, bool playerDied, bool playerFinishedLevel)
         {
             // Observation
             Vision = vision;
@@ -29,8 +29,8 @@ namespace CelesteBot_2023
             CanDash = player.CanDash ? 1 : 0;
             // Reward
             //Reward = reward;
-            DeathFlag = player.Dead;
-            FinishedLevel = episode.FinishedLevel;
+            DeathFlag = playerDied;
+            FinishedLevel = playerFinishedLevel;
             IsClimbing = episode.IsClimbing;
             if (!DeathFlag)
             {
@@ -72,8 +72,10 @@ namespace CelesteBot_2023
         }
         public void AddReward(double reward)
         {
-
-            RewardQueue.Add(reward);
+            if (CelesteBotInteropModule.Settings.TrainingEnabled)
+            {
+                RewardQueue.Add(reward);
+            }
         }
         public double PythonGetNextReward()
         {

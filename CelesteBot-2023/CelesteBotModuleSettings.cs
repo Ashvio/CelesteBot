@@ -12,38 +12,19 @@ namespace CelesteBot_2023
         public bool TrainingEnabled { get; set; } = true;
 
         public bool DrawAlways { get; set; } = true;
+
         [SettingRange(1, 10)]
-        public int TimeStuckThreshold { get; set; } = 4;
-        public bool ShowDetailedPlayerInfo { get; set; } = true;
-        public bool ShowPlayerBrain { get; set; } = true;
-        public bool ShowPlayerFitness { get; set; } = true;
-        public bool ShowGraph { get; set; } = true;
-        public bool ShowTarget { get; set; } = true;
-        public bool ShowRewardGraph { get; set; } = true;
-        [SettingRange(2, 25)]
-        public int GenerationsToSaveForGraph { get; set; } = 5;
-        [SettingRange(10, 100), SettingNeedsRelaunch()]
-        public int OrganismsPerGeneration { get; set; } = 30;
-        [SettingRange(1, 10), SettingNeedsRelaunch()]
-        public int WeightMaximum { get; set; } = 5;
-        [SettingRange(2, 50)]
         public int UpdateTargetThreshold { get; set; } = 8;
-        [SettingRange(0, 20)]
-        public int TargetReachedRewardFitness { get; set; } = 2;
-        public bool ShowBestFitness { get; set; } = true;
-        [SettingRange(1, 25)]
-        public int CheckpointInterval { get; set; } = 3;
-        [SettingRange(0, 500)]
-        public int CheckpointToLoad { get; set; } = 20;
-        [SettingRange(5, 50)]
-        public int MaxTalkAttempts { get; set; } = 30;
-        [SettingRange(60, 240)]
-        public int TalkFrameBuffer { get; set; } = 100;
-        [SettingRange(4, 30), SettingNeedsRelaunch()]
 
-        public int CalculationsPerSecond { get; set; } = 8;
-        [SettingRange(1, 10), SettingNeedsRelaunch()]
+        // Number of frames waiting between observation being sent and action being received
+        [SettingRange(1, 4)]
+        public int ActionCalculationFrames { get; set; } = 2;
 
+
+        [SettingRange(1, 30), SettingNeedsRelaunch()]
+        public int CalculationsPerSecond { get; set; } = 4;
+
+        [SettingRange(60, 3000), SettingNeedsRelaunch()]
         public int XMaxCacheSize { get; set; } = 1000;
         [SettingRange(60, 3000), SettingNeedsRelaunch()]
         public int YMaxCacheSize { get; set; } = 1000;

@@ -5,6 +5,6 @@ copy "C:\Users\Ashvin\.nuget\packages\pythonnet\3.0.3\lib\netstandard2.0\Python.
 copy "C:\Users\Ashvin\.nuget\packages\desktop.robot\1.5.0\lib\net6.0\Desktop.Robot.dll" "C:\Program Files (x86)\Steam\steamapps\common\Celeste\"  ;
 
 copy "everest.yaml" "C:\Program Files (x86)\Steam\steamapps\common\Celeste\Mods\CelesteBot\" 
-robocopy /MIR "python_rl " "C:\Program Files (x86)\Steam\steamapps\common\Celeste\python_rl\ " *.py
+robocopy /MIR "python_rl " "C:\Program Files (x86)\Steam\steamapps\common\Celeste\python_rl\ " 
 exit 0
 :: "C:\Program Files (x86)\Steam\steamapps\common\Celeste\Celeste.exe"

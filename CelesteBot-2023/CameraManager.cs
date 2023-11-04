@@ -13,7 +13,7 @@ namespace CelesteBot_2023
 {
     public class CameraManager
     {
-        CelestePlayer c_player;
+        AIPlayerLoop c_player;
 
         public PyList CameraVision;
         public const int NUM_PIXELS_PER_TILE = 8;
@@ -21,7 +21,7 @@ namespace CelesteBot_2023
         
         public Player player { get => c_player.player; }
 
-        public CameraManager(CelestePlayer player)
+        public CameraManager(AIPlayerLoop player)
         {
             using (Py.GIL())
             {
@@ -39,7 +39,6 @@ namespace CelesteBot_2023
                 }
             }
             this.c_player = player;
-            
         }   
         internal void UpdateScreenVision()
         {

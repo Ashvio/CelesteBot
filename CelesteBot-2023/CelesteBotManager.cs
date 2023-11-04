@@ -42,7 +42,7 @@ namespace CelesteBot_2023
         public static int ENTITY_CACHE_UPDATE_FRAMES = 10;
         public static int FAST_MODE_MULTIPLIER = 10;
 
-        public static float UPDATE_TARGET_THRESHOLD = 20; // Pixels in distance between the fitness target and the current position before considering it "reached"
+        public static float UPDATE_TARGET_THRESHOLD = 40; // Pixels in distance between the fitness target and the current position before considering it "reached"
 
         public static Vector2 TEXT_OFFSET = new Vector2(7, 7);
         // Graphing Parameters
@@ -127,20 +127,6 @@ namespace CelesteBot_2023
             Log("Finished Initializing CelesteBot");
         }
 
-        public static void Draw()
-        {
-            //Monocle.Engine.Draw(gameTime);
-            int viewWidth = Engine.ViewWidth;
-            int viewHeight = Engine.ViewHeight;
-
-            Monocle.Draw.SpriteBatch.Begin();
-
-            Monocle.Draw.SpriteBatch.End();
-        }
-        // WHAT IF: I ONLY UPDATE PREVIOUS STATES' QTABLE DATA
-        // BECAUSE I CANT PREDICT THE NEXT FRAME/STATE!
-
-
         public static bool CompleteCutsceneSkip(InputPlayer inputPlayer)
         {
             InputData thisFrame = new InputData();
@@ -173,6 +159,7 @@ namespace CelesteBot_2023
                 if (Cutscene)
                 {
                     Cutscene = CompleteCutsceneSkip(inputPlayer);
+                    Logger.Log(ModLogKey, "Confirmed a cutscene skip!");
                     Logger.Log(CelesteBotInteropModule.ModLogKey, "After Cutscene skip: " + Cutscene);
                     return true; // even if it returned false last time, still skip
                 }
@@ -182,6 +169,8 @@ namespace CelesteBot_2023
 
                     if (level.InCutscene)
                     {
+                        Logger.Log(ModLogKey, "Confirmed a cutscene skip!");
+
                         Logger.Log(CelesteBotInteropModule.ModLogKey, "Entered Cutscene! With Cutscene: " + Cutscene);
                         Cutscene = true;
                         InputData newFrame = new InputData();
@@ -208,6 +197,7 @@ namespace CelesteBot_2023
                 InputData temp = new InputData();
                 temp.MenuConfirm = true;
                 inputPlayer.UpdateData(temp);
+                Logger.Log(ModLogKey, "Restarting!");
                 return true;
             }
             return false;
@@ -218,7 +208,7 @@ namespace CelesteBot_2023
 
 
      
-        public static void DrawDetails(CelestePlayer p)
+        public static void DrawDetails(AIPlayerLoop p)
         {
             Monocle.Draw.Rect(0f, 90f, 600f, 30f, Color.Black * 0.8f);
             ActiveFont.Draw("(X: " + p.player.BottomCenter.X + ", Y: " + p.player.BottomCenter.Y + "), (Vx: " + p.player.Speed.X + ", Vy: " + p.player.Speed.Y + "), Dashes: " + p.player.Dashes + ", Stamina: " + p.player.Stamina, new Vector2(3, 90), Vector2.Zero, new Vector2(0.4f, 0.4f), Color.White);

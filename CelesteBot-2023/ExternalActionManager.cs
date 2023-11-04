@@ -40,7 +40,6 @@ namespace CelesteBot_2023
         LeftRightActionType LeftRightAction;
         SpecialMoveActionType SpecialMoveAction;
         GrabActionType grabAction;
-        public int NumFramesBeforeNextUpdate { get; private set; }
 
         public Action(int[] action)
         {
@@ -49,12 +48,11 @@ namespace CelesteBot_2023
 
             SpecialMoveAction = (SpecialMoveActionType)action[2];
             grabAction = (GrabActionType)action[3];
-            NumFramesBeforeNextUpdate = action[4];
         }
 
         public override string ToString()
         {
-            return "Move:" + Enum.GetName(typeof(UpDownActionType), UpDownAction) + " " + Enum.GetName(typeof(LeftRightActionType), LeftRightAction) + "\nSpecial:" + Enum.GetName(typeof(SpecialMoveActionType), SpecialMoveAction) + " Grab:" + Enum.GetName(typeof(GrabActionType), grabAction) + "Requested frames: " + NumFramesBeforeNextUpdate;
+            return "Move:" + Enum.GetName(typeof(UpDownActionType), UpDownAction) + " " + Enum.GetName(typeof(LeftRightActionType), LeftRightAction) + "\nSpecial:" + Enum.GetName(typeof(SpecialMoveActionType), SpecialMoveAction) + " Grab:" + Enum.GetName(typeof(GrabActionType), grabAction);
         }
 
         public float GetMoveX()
@@ -185,10 +183,15 @@ namespace CelesteBot_2023
                 throw new TimeoutException("Action retrieval timed out!");
             }
             double end = DateTime.Now.TimeOfDay.TotalMilliseconds;
-            double total_time = end - start;
+            double totalTime = end - start;
             double frameCalculationTime = 1000 / (CelesteBotInteropModule.Settings.CalculationsPerSecond * CelesteBotInteropModule.FrameLoops);
-            if (total_time > frameCalculationTime) {
-                CelesteBotManager.Log("Action retrieval time too slow! " + total_time.ToString() + "Frame calculation time: " + frameCalculationTime , LogLevel.Info);
+            if (totalTime > frameCalculationTime) {
+                CelesteBotManager.Log("Action retrieval time too slow! " + totalTime.ToString() + "Frame calculation time: " + frameCalculationTime , LogLevel.Info);
+                CelesteBotInteropModule.ActionRetrievalStatus = "DELAYED: " + (totalTime - frameCalculationTime).ToString("F2") +"ms too slow";
+            }
+            else
+            {
+                CelesteBotInteropModule.ActionRetrievalStatus = "Normal: " + totalTime.ToString("F2") + " < " + frameCalculationTime.ToString("F2") + "ms";
             }
             return output;
         }

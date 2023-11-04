@@ -38,7 +38,7 @@ if __name__ == "__main__":
 
     args = get_cli_args()
     # Create Celeste worker folders by copying original folder and contents
-
+    os.environ["NUM_CLIENT_WORKERS"] = str(args.num_workers)
     # Get Celeste worker path by stepping back one folder from CELESTE PATH and creating directory called CelesteWorkers
     home_path = os.path.dirname(CELESTE_BASE_PATH)
     celeste_worker_path = os.path.join(home_path, "CelesteWorkers")
@@ -67,7 +67,7 @@ if __name__ == "__main__":
         processes.append(p)
         time.sleep(0.25)
     # Wait for processes to open windows
-    time.sleep(20)
+    time.sleep(5 * args.num_workers)
     x = 0
     y = 0
     print(f"Moving {args.num_workers} windows")

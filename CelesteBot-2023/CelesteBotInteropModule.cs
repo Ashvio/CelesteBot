@@ -40,21 +40,21 @@ namespace CelesteBot_2023
         public static ExternalActionManager ActionManager = new ExternalActionManager();
         public static ExternalGameStateManager GameStateManager = new ExternalGameStateManager();
 
-        public static CelestePlayer CurrentPlayer;
+        public static AIPlayerLoop AIPlayer;
 
         private static int buffer = 0; // The number of frames to wait when setting a new current player
 
 
-        public static bool DrawPlayer { get { return !ShowNothing && Settings.ShowPlayerBrain; } set { } }
-        public static bool DrawDetails { get { return !ShowNothing && Settings.ShowDetailedPlayerInfo; } set { } }
-        public static bool DrawBestFitness { get { return !ShowNothing && Settings.ShowBestFitness; } set { } }
-        public static bool DrawGraph { get { return !ShowNothing && Settings.ShowGraph; } set { } }
-        public static bool DrawTarget { get { return !ShowNothing && Settings.ShowTarget; } set { } }
-        public static bool DrawRewardGraph { get { return !ShowNothing && Settings.ShowRewardGraph && LearningStyle == LearningStyle.Q; } set { } }
 
         public static int FrameCounter { get; private set; }
-        public static bool RunActionNextFrame { get; private set; }
-        public static Action LastAction { get; private set; }
+        public static bool NeedGameStateUpdate { get; private set; }
+        public static Action LatestAction { get; private set; }
+        public static int RunActionInNFrames { get; private set; } = -1;
+        public static string ActionRetrievalStatus { get; internal set; }
+        public static bool NeedImmediateGameStateUpdate { get; private set; }
+        public static bool PlayerDied { get; private set; }
+        public static bool PlayerFinishedLevel { get; private set; }
+
         public static bool FitnessAppendMode = false;
         public static bool ShowNothing = false;
 
@@ -89,7 +89,6 @@ namespace CelesteBot_2023
         public static InputPlayer inputPlayer;
 
         private static Dictionary<string, int> times;
-        static bool FirstReward = true;
         public static bool IsInitializing;
         public static int InitializingFrameCounter = 0;
         private static bool IsKeyDown(Keys key)
@@ -122,17 +121,15 @@ namespace CelesteBot_2023
             IsInitializing = true;
             base.Initialize();
             AttributeUtils.Invoke<InitializeAttribute>();
-            RunActionNextFrame = false;
             // Hey, InputPlayer should be made to work without removing self when players die
             inputPlayer = new InputPlayer(Celeste.Celeste.Instance, new InputData()); // Blank InputData when constructing. Overwrite it when needing to update inputs
             Celeste.Celeste.Instance.Components.Add(inputPlayer);
 
-            CurrentPlayer = new CelestePlayer();
+            AIPlayer = new AIPlayerLoop();
             //GeneratePlayer();
             FrameLoops = CelesteBotManager.IsWorker ? CelesteBotManager.FAST_MODE_MULTIPLIER : 1;
-            TalkMaxAttempts = Settings.MaxTalkAttempts;
-            MaxTimeSinceLastTalk = Settings.TalkFrameBuffer;
-
+            TalkMaxAttempts = 30;
+            MaxTimeSinceLastTalk = 100;
         }
 
         public override void Unload()
@@ -151,7 +148,7 @@ namespace CelesteBot_2023
         private bool Player_ClimbCheck(On.Celeste.Player.orig_ClimbCheck orig, Player self, int dir, int yAdd)
         {
             bool result = orig(self, dir, yAdd);
-            CurrentPlayer.Episode.IsClimbing = result;
+            AIPlayer.Episode.IsClimbing = result;
             return result;
         }
 
@@ -171,24 +168,6 @@ namespace CelesteBot_2023
             //}
         }
 
- 
-
-        static void InitializeRun()
-        {
-            //InitializingFrameCounter++;
-            InputData nextInput = new InputData();
-
-            if (GetPlayer() == null)
-            {
-                KeyboardManager.SetConfirm();
-            }
-            else
-            {
-                IsInitializing = false;
-                nextInput.MenuConfirm = false;
-            }
-            inputPlayer.UpdateData(nextInput);
-        }
         public static Player GetPlayer()
         {
             Scene scene = Engine.Scene;
@@ -206,172 +185,159 @@ namespace CelesteBot_2023
 
         public static void MInput_Update(On.Monocle.MInput.orig_Update original)
         {
-            //if (IsInitializing)
-            //{
-            //    // Press A until we are in game
-            //    CelesteBotManager.Log("Trying to start game");
-            //    InitializeRun();
-            //    original();
-            //    return;
-            //}
-            // Comment this function  
             if (!Settings.Enabled)
             {
                 original();
                 return;
             }
 
-
-
-            try
+            Level level = TileFinder.GetCelesteLevel();
+            if (level == null || AIPlayer.player == null)
             {
-                Player player = GetPlayer();
-                if (player == null)
-                {
-                    BotState = State.None;
-                    original();
-                    return;
-                }
-                if (TalkComponent.PlayerOver != null && TalkCount < TalkMaxAttempts && TimeSinceLastTalk >= MaxTimeSinceLastTalk)
-                {
-                    if (inputPlayer.LastData.Talk)
-                    {
-                        // Lets stop talking for a quick frame
-                        throw new InvalidCastException("This is just to get us out of the rest of this try-catch, normal operation applies again");
-                    }
-                    // Hey we can talk!
-                    InputData data = new InputData();
-                    data.Talk = true;
-                    inputPlayer.UpdateData(data);
-                    Logger.Log(ModLogKey, "We tried to talk!");
-                    TalkCount++;
-                    TimeSinceLastTalk = 0;
-                    return;
-                }
-                if (Celeste.TalkComponent.PlayerOver == null)
-                {
-                    TimeSinceLastTalk = MaxTimeSinceLastTalk;
-                    TalkCount = 0;
-                }
-                TimeSinceLastTalk++;
-                Celeste.Level level = TileFinder.GetCelesteLevel();
-                if (player.StateMachine.State == 11 && !player.OnGround() && inputPlayer.LastData.Dash != true && (level.Session.MapData.Filename + "_" + level.Session.Level == "0-Intro_3"))// this makes sure we retry
-                {
-                    // This means we are in the bird tutorial.
-                    // Make us finish it right away.
-                    InputData data = new InputData();
-                    data.MoveX = 1;
-                    data.MoveY = -1;
-                    data.Dash = true;
-                    inputPlayer.UpdateData(data);
-                    Logger.Log(ModLogKey, "The player is in the dash cutscene, so we tried to get them out of it by dashing.");
-
-                    return;
-                }
-
+                original();
+                BotState = State.Disabled;
+                return;
             }
-            catch (Exception ex)
+            else
             {
-                // level doesn't exist yet
-                if (ex is NullReferenceException || ex is InvalidCastException)
+                bool isDashTutorial = CheckDashTutorial(level);
+                if (isDashTutorial)
                 {
                     original();
-                    BotState = State.None;
                     return;
-                }
-                else
-                {
-                    throw;
                 }
             }
             BotState = State.Running;
-            AIEnabled = true;
-            if (CelesteBotManager.CompleteRestart(inputPlayer))
+            if (Settings.TrainingEnabled)
             {
-                Logger.Log(ModLogKey, "Restarting!");
-                return;
-            }
-            // If in cutscene skip state, skip it the rest of the way.
-            if (CelesteBotManager.CheckForCutsceneSkip(inputPlayer))
-            {
-                Logger.Log(ModLogKey, "Confirmed a cutscene skip!");
-                return;
-            }
-            if (CelesteBotManager.CompleteCutsceneSkip(inputPlayer))
-            {
-                Logger.Log(ModLogKey, "Completing a Cutscene Skip!");
-                return;
-            }
-            InputData nextInput = new InputData();
-            bool handled = HandleKB(nextInput);
-            if (handled)
-            {
-                original();
-                return;
-            }
-            if (RunActionNextFrame && Settings.TrainingEnabled)
-            {
-                // We have an action waiting for us!
-                Action nextAction = ActionManager.GetNextAction();
-                // minimum of 4 frame buffer
-                CurrentPlayer.Episode.FramesUntilNextCalculation = nextAction.NumFramesBeforeNextUpdate + 4;
-                nextInput.UpdateData(nextAction);
-                inputPlayer.UpdateData(nextInput);
-                RunActionNextFrame = false;
-                LastAction = nextAction;
-            }
-            if (CurrentPlayer.WaitingForRespawn) 
-            {
-                nextInput = new InputData();
-                inputPlayer.UpdateData(nextInput);
-
-            }
-
-            CurrentPlayer.Episode.IncrementFrames();
-
-            if (CurrentPlayer.Episode.IsRewardFrame())
-            {
-                if (CurrentPlayer.WaitingForRespawn) // If we are waiting for a respawn, just skip this frame
+                if (CelesteBotManager.CompleteRestart(inputPlayer) || CelesteBotManager.CheckForCutsceneSkip(inputPlayer) || CelesteBotManager.CompleteCutsceneSkip(inputPlayer))
                 {
                     original();
                     return;
                 }
-                if (FirstReward)
+                bool talked = CheckTalk();
+            }
+
+            InputData nextInput = new InputData();
+            HandleKB(nextInput);
+            AIPlayer.Episode.FinishedLevel = AIPlayer.Episode.UpdateTarget();
+            if ((AIPlayer.player.Dead && !AIPlayer.WaitingForRespawn) || AIPlayer.Episode.FinishedLevel)
+            {
+                NeedImmediateGameStateUpdate = true;
+                AIPlayer.WaitingForRespawn = true;
+                PlayerDied = AIPlayer.player.Dead; 
+                PlayerFinishedLevel = AIPlayer.Episode.FinishedLevel;
+            }
+            else if (AIPlayer.WaitingForRespawn && AIPlayer.player.Dead)
+            {
+                // clear movement buffer
+                nextInput = new InputData();
+                inputPlayer.UpdateData(nextInput);
+            } else if (AIPlayer.WaitingForRespawn && !AIPlayer.player.Dead)
+            {
+                AIPlayer.WaitingForRespawn = false;
+            }
+            // Handle RL state machine below
+            AIPlayer.Episode.IncrementFrames();
+            if (!AIPlayer.Episode.FirstObservationSent)
+            {
+                bool observationSent = AIPlayer.ProcessGameState(false, false);
+                AIPlayer.Episode.FirstObservationSent = observationSent;
+
+                RunActionInNFrames = GetActionFrameDelay(observationSent);
+            }
+            else if (RunActionInNFrames != -1)
+            {
+                if (RunActionInNFrames == 0)
                 {
-                    FirstReward = false;
+                    // We have an action waiting for us!
+                    Action nextAction = ActionManager.GetNextAction();
+                    // send new inputs to player
+                    nextInput.UpdateData(nextAction);
+                    inputPlayer.UpdateData(nextInput);
+                    RunActionInNFrames = -1;
+                    LatestAction = nextAction;
+                    NeedGameStateUpdate = true;
+                    original();
+                    return;
                 }
                 else
                 {
-
-                    if (!CurrentPlayer.player.Dead )
-                    {
-                        double reward = CurrentPlayer.Episode.GetReward();
-                        if (Settings.TrainingEnabled)
-                        {
-                            GameStateManager.AddReward(reward);
-                        }
-                    }
-                    if (CurrentPlayer.Episode.FinishedLevel)
-                    {
-                        CurrentPlayer.Episode.ResetEpisode();
-                    }
+                    RunActionInNFrames -= 1;
                 }
             }
-            // for now, only do N  calculations a second
-            if (CurrentPlayer.Episode.IsCalculateFrame())
+            
+            else if (NeedImmediateGameStateUpdate || (NeedGameStateUpdate && AIPlayer.Episode.IsCalculateFrame()) || !Settings.TrainingEnabled)
             {
-                CurrentPlayer.Update();
-                if (CurrentPlayer.WaitingForRespawn) // If we are waiting for a respawn, just skip this frame
+                // get reward and observation
+                bool observationSent = AIPlayer.ProcessGameState(PlayerDied, PlayerFinishedLevel);
+                
+                double reward = AIPlayer.Episode.GetReward();
+
+                GameStateManager.AddReward(reward);
+                if (!NeedImmediateGameStateUpdate)
                 {
-                    original();
-                    return;
+                    RunActionInNFrames = GetActionFrameDelay(observationSent);
                 }
-                // Give the API 1 frame to get the next action
-                RunActionNextFrame = true;
+                else if (observationSent)
+                {
+                    // if player is dead or level finished, first need to reset the episode
+                    AIPlayer.Episode.ResetEpisode();
+                    PlayerDied = false;
+                    PlayerFinishedLevel = false;
+                }
+                NeedGameStateUpdate = false;
+                NeedImmediateGameStateUpdate = false;
 
             }
 
             original();
+        }
+        private static int GetActionFrameDelay(bool observationSent)
+        {
+            return (observationSent && Settings.TrainingEnabled) ? Settings.ActionCalculationFrames : -1;
+        }
+
+        private static bool CheckDashTutorial(Level level)
+        {
+            if (AIPlayer.player.StateMachine.State == 11 && !AIPlayer.player.OnGround() && inputPlayer.LastData.Dash != true && (level.Session.MapData.Filename + "_" + level.Session.Level == "0-Intro_3"))// this makes sure we retry
+            {
+                // This means we are in the bird tutorial.
+                // Make us finish it right away.
+                InputData data = new InputData();
+                data.MoveX = 1;
+                data.MoveY = -1;
+                data.Dash = true;
+                inputPlayer.UpdateData(data);
+                Logger.Log(ModLogKey, "The player is in the dash cutscene, so we tried to get them out of it by dashing.");
+
+                return true;
+            }
+            return false;
+        }
+
+        static bool CheckTalk()
+        {
+            if (TalkComponent.PlayerOver != null && TalkCount < TalkMaxAttempts && TimeSinceLastTalk >= MaxTimeSinceLastTalk)
+            {
+                if (inputPlayer.LastData.Talk)
+                    return false;
+                // Hey we can talk!
+                InputData data = new InputData();
+                data.Talk = true;
+                inputPlayer.UpdateData(data);
+                Logger.Log(ModLogKey, "We tried to talk!");
+                TalkCount++;
+                TimeSinceLastTalk = 0;
+                return true;
+            }
+            if (Celeste.TalkComponent.PlayerOver == null)
+            {
+                TimeSinceLastTalk = MaxTimeSinceLastTalk;
+                TalkCount = 0;
+            }
+            TimeSinceLastTalk++;
+            return true;
         }
         static bool HandleKB(InputData nextInput)
         {
@@ -483,14 +449,14 @@ namespace CelesteBot_2023
         {
             //try
             //{
-            //    if (CurrentPlayer.player.Dead)
+            //    if (Settings.TrainingEnabled && AIPlayer.player.Dead)
             //    {
-            //        CurrentPlayer.Dead = true;
             //        InputData data = new InputData();
             //        data.QuickRestart = true;
             //        inputPlayer.UpdateData(data);
             //    }
-            //} catch (NullReferenceException e)
+            //}
+            //catch (NullReferenceException)
             //{
             //    // Player has not been setup yet
             //}
@@ -518,9 +484,9 @@ namespace CelesteBot_2023
         public static void OnScene_Transition(On.Celeste.Celeste.orig_OnSceneTransition original, Celeste.Celeste self, Scene last, Scene next)
         {
             original(self, last, next);
-            if (!CurrentPlayer.VisionSetup)
+            if (!AIPlayer.VisionSetup)
             {
-                CurrentPlayer.SetupVision();
+                AIPlayer.SetupVision();
             }
             //TileFinder.GetAllEntities();
             ResetRooms();

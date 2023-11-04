@@ -62,7 +62,7 @@ class CelesteEnv(gym.Env):
         """
         self.logger = logger
         self.off_policy = off_policy
-        self.action_space = spaces.MultiDiscrete([3, 3, 4, 2, 5])
+        self.action_space = spaces.MultiDiscrete([3, 3, 4, 2])
         shape = (self.VISION_SIZE, self.VISION_SIZE, 1)
 
         self.observation_space = spaces.Dict({
@@ -72,7 +72,6 @@ class CelesteEnv(gym.Env):
                                               dtype=np.uint8),
             "on_ground": spaces.MultiBinary(1),
             "position": spaces.Box(self.MIN_POSITION, self.MAX_POSITION, shape=(2,), dtype=np.float32),
-            "screen_position": spaces.Box(self.MIN_POSITION, self.MAX_POSITION, shape=(2,), dtype=np.float32),
             "speed_x_y": spaces.Box(self.MIN_SPEED, self.MAX_SPEED, shape=(2,), dtype=np.float16),
             "stamina": spaces.Box(-10, 10, shape=(1,), ),
             "target": spaces.Box(self.MIN_POSITION, self.MAX_POSITION, shape=(2,), dtype=np.float32),

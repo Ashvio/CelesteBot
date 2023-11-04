@@ -68,7 +68,7 @@ namespace CelesteBot_2023
 
                 rewardQueueProducer = new Thread(() => RewardQueueProducer(python_celeste_client));
                 rewardQueueProducer.Name = "RewardProducer";
-                CelestePlayer.Vision2D = new PyList();
+                AIPlayerLoop.Vision2D = new PyList();
                 for (int i = 0; i < CelesteBotManager.VISION_2D_X_SIZE; i++)
                 {
                     PyList sublist = new PyList();
@@ -76,7 +76,7 @@ namespace CelesteBot_2023
                     {
                         sublist.Append(new PyInt(0));
                     }
-                    CelestePlayer.Vision2D.Append(sublist);
+                    AIPlayerLoop.Vision2D.Append(sublist);
                 }
             }
             actionConsumerThread.Start();
