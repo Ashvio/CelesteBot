@@ -26,6 +26,12 @@ def get_cli_args():
         default=1,
         help="The number of workers.",
     )
+    parser.add_argument(
+        "--worker-index-offset",
+        type=int,
+        default=0,
+        help="The number of workers.",
+    )
 
     args = parser.parse_args()
     print(f"Running with following CLI args: {args}")
@@ -45,7 +51,7 @@ if __name__ == "__main__":
     print(home_path)
     os.makedirs(celeste_worker_path, exist_ok=True)
     executables = []
-    for i in range(args.num_workers):
+    for i in range(args.worker_index_offset, args.num_workers):
         worker_path = os.path.join(celeste_worker_path, f"Celeste_{i}")
         print("worker_path", worker_path)
         os.makedirs(worker_path, exist_ok=True)
@@ -67,7 +73,7 @@ if __name__ == "__main__":
         processes.append(p)
         time.sleep(0.25)
     # Wait for processes to open windows
-    time.sleep(5 * args.num_workers)
+    time.sleep(2.5 * args.num_workers)
     x = 0
     y = 0
     print(f"Moving {args.num_workers} windows")
@@ -86,7 +92,7 @@ if __name__ == "__main__":
             for j in range(num_rows):
                 if i * num_rows + j >= args.num_workers:
                     break
-                process = processes[i * num_rows + j]
+                process = processes[i * num_rows + j - args.worker_index_offset]
                 app = application.Application()
                 app.connect(process=process.pid)
                 window = app.window()
@@ -107,7 +113,7 @@ if __name__ == "__main__":
 
         window.set_focus()
         window.set_keyboard_focus()
-        for i in range(10):
+        for i in range(15):
             # Start the game
             time.sleep(0.05)
             gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)

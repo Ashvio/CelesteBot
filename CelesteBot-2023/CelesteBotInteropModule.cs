@@ -51,8 +51,8 @@ namespace CelesteBot_2023
         public static Action LatestAction { get; private set; }
         public static int RunActionInNFrames { get; private set; } = -1;
         public static string ActionRetrievalStatus { get; internal set; }
-        public static bool NeedImmediateGameStateUpdate { get; private set; }
-        public static bool PlayerDied { get; private set; }
+        public static bool NeedImmediateGameStateUpdate;
+        public static bool PlayerDied;
         public static bool PlayerFinishedLevel { get; private set; }
 
         public static bool FitnessAppendMode = false;
@@ -198,19 +198,10 @@ namespace CelesteBot_2023
                 BotState = State.Disabled;
                 return;
             }
-            else
-            {
-                bool isDashTutorial = CheckDashTutorial(level);
-                if (isDashTutorial)
-                {
-                    original();
-                    return;
-                }
-            }
             BotState = State.Running;
             if (Settings.TrainingEnabled)
             {
-                if (CelesteBotManager.CompleteRestart(inputPlayer) || CelesteBotManager.CheckForCutsceneSkip(inputPlayer) || CelesteBotManager.CompleteCutsceneSkip(inputPlayer))
+                if (CheckDashTutorial(level) || CelesteBotManager.CompleteRestart(inputPlayer) || CelesteBotManager.CheckForCutsceneSkip(inputPlayer) || CelesteBotManager.CompleteCutsceneSkip(inputPlayer))
                 {
                     original();
                     return;
@@ -220,13 +211,13 @@ namespace CelesteBot_2023
 
             InputData nextInput = new InputData();
             HandleKB(nextInput);
-            AIPlayer.Episode.FinishedLevel = AIPlayer.Episode.UpdateTarget();
-            if ((AIPlayer.player.Dead && !AIPlayer.WaitingForRespawn) || AIPlayer.Episode.FinishedLevel)
+            AIPlayer.Episode.ReachedTarget = TargetFinder.CheckTargetReached(AIPlayer.player);
+            if ((AIPlayer.player.Dead && !AIPlayer.WaitingForRespawn))
             {
                 NeedImmediateGameStateUpdate = true;
                 AIPlayer.WaitingForRespawn = true;
                 PlayerDied = AIPlayer.player.Dead; 
-                PlayerFinishedLevel = AIPlayer.Episode.FinishedLevel;
+                PlayerFinishedLevel = AIPlayer.Episode.ReachedTarget;
             }
             else if (AIPlayer.WaitingForRespawn && AIPlayer.player.Dead)
             {
@@ -241,7 +232,9 @@ namespace CelesteBot_2023
             AIPlayer.Episode.IncrementFrames();
             if (!AIPlayer.Episode.FirstObservationSent)
             {
-                bool observationSent = AIPlayer.ProcessGameState(false, false);
+                AIPlayer.Episode.NewEpisodeSetOriginalDistance();
+                AIPlayer.ProcessGameState(false, false);
+                bool observationSent = true;
                 AIPlayer.Episode.FirstObservationSent = observationSent;
 
                 RunActionInNFrames = GetActionFrameDelay(observationSent);
@@ -270,16 +263,16 @@ namespace CelesteBot_2023
             else if (NeedImmediateGameStateUpdate || (NeedGameStateUpdate && AIPlayer.Episode.IsCalculateFrame()) || !Settings.TrainingEnabled)
             {
                 // get reward and observation
-                bool observationSent = AIPlayer.ProcessGameState(PlayerDied, PlayerFinishedLevel);
+                AIPlayer.ProcessGameState(PlayerDied, PlayerFinishedLevel);
                 
                 double reward = AIPlayer.Episode.GetReward();
 
                 GameStateManager.AddReward(reward);
                 if (!NeedImmediateGameStateUpdate)
                 {
-                    RunActionInNFrames = GetActionFrameDelay(observationSent);
+                    RunActionInNFrames = GetActionFrameDelay(true);
                 }
-                else if (observationSent)
+                else
                 {
                     // if player is dead or level finished, first need to reset the episode
                     AIPlayer.Episode.ResetEpisode();

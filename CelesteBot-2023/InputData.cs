@@ -1,5 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
 using System;
+using System.Drawing.Printing;
 
 namespace CelesteBot_2023
 {
@@ -77,6 +78,12 @@ namespace CelesteBot_2023
                 //LongJumpPersistentValue = LongJumpValue;
                 //JumpValue = LongJumpValue;
             }
+            if (Dash)
+            {
+                Aim = new Vector2(MoveX, MoveY);
+            }
+
+            CelesteBotManager.Log("Action: " + this + " " + action);
         }
         public bool ESC
         {

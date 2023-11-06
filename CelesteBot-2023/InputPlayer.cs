@@ -40,6 +40,8 @@ namespace CelesteBot_2023
                 newData.Dash = false;
                 newData.DashValue = 0;
             }
+
+            
             //if ((LastData.GrabValue < 0 && newData.GrabValue > 0) || (newData.GrabValue < 0 && LastData.GrabValue > 0))
             //{
             //    // Release for one frame

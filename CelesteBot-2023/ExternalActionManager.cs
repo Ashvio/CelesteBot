@@ -8,27 +8,27 @@ namespace CelesteBot_2023
 {
     enum UpDownActionType
     {
-        NOOP,
-        Up,
-        Down,
+        NOOP = 0,
+        Up = 1,
+        Down = 2,
     }
     enum LeftRightActionType
     {
-        NOOP,
-        Left,
-        Right,
+        NOOP = 0,
+        Left = 1,
+        Right = 2,
     }
     enum SpecialMoveActionType
     {
-        NOOP,
-        Jump,
-        LongJump,
-        Dash,
+        NOOP = 0,
+        Jump = 1,
+        LongJump = 2,
+        Dash = 3,
     }
     enum GrabActionType
     {
-        NOOP,
-        Grab,
+        NOOP = 0,
+        Grab = 1,
     }
     public class Action
     {
@@ -174,7 +174,8 @@ namespace CelesteBot_2023
             double start = DateTime.Now.TimeOfDay.TotalMilliseconds;
             Action output;
             numRequestedActions++;
-            bool success = ActionQueue.TryTake(out output, 5000);
+            int timeout = CelesteBotManager.IsWorker ? 1000 * 30 : 1000 * 5;
+            bool success = ActionQueue.TryTake(out output, timeout);
             if (!success)
             {
                 CelesteBotManager.Log("Action retrieval timed out!", LogLevel.Error);
@@ -186,7 +187,7 @@ namespace CelesteBot_2023
             double totalTime = end - start;
             double frameCalculationTime = 1000 / (CelesteBotInteropModule.Settings.CalculationsPerSecond * CelesteBotInteropModule.FrameLoops);
             if (totalTime > frameCalculationTime) {
-                CelesteBotManager.Log("Action retrieval time too slow! " + totalTime.ToString() + "Frame calculation time: " + frameCalculationTime , LogLevel.Info);
+                CelesteBotManager.Log("Action retrieval time too slow! " + totalTime.ToString() + "Frame calculation time: " + frameCalculationTime);
                 CelesteBotInteropModule.ActionRetrievalStatus = "DELAYED: " + (totalTime - frameCalculationTime).ToString("F2") +"ms too slow";
             }
             else

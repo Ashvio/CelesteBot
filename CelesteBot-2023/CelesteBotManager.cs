@@ -42,7 +42,7 @@ namespace CelesteBot_2023
         public static int ENTITY_CACHE_UPDATE_FRAMES = 10;
         public static int FAST_MODE_MULTIPLIER = 10;
 
-        public static float UPDATE_TARGET_THRESHOLD = 40; // Pixels in distance between the fitness target and the current position before considering it "reached"
+        public static float UPDATE_TARGET_THRESHOLD = 25; // Pixels in distance between the fitness target and the current position before considering it "reached"
 
         public static Vector2 TEXT_OFFSET = new Vector2(7, 7);
         // Graphing Parameters

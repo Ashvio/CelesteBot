@@ -123,7 +123,6 @@ class CelesteClient:
                             )
         self.logger = logging.getLogger('PythonClientLogger')
         self.logger.log(logging.INFO, "Python client started")
-        session = requests.Session()
         # TODO: Get worker number based on path of executable. Each worker will run in a different copy of Celeste,
         #  eg /Celeste_001, /Celeste_002
         local_path = os.getcwd()
@@ -136,23 +135,21 @@ class CelesteClient:
             # base Celeste game
             self.is_worker = False
             worker_number = 0
-        num_client_workers = int(os.environ.get("NUM_CLIENT_WORKERS", 4))
-        num_server_workers = celestebot_server.NUM_WORKERS
-        num_clients_per_server = max(num_client_workers // num_server_workers, 1)
+        num_client_workers = int(os.environ.get("NUM_CLIENT_WORKERS", 9))
+        self.num_server_workers = celestebot_server.NUM_WORKERS
+        num_clients_per_server = max(num_client_workers // self.num_server_workers, 1)
+        # num_clients_per_server = 1
         server_number = worker_number // num_clients_per_server
         self.logger.log(logging.INFO, f"Worker number: {worker_number}")
         self.logger.log(logging.INFO, f"Num client workers: {num_client_workers}")
-        self.logger.log(logging.INFO, f"Num server workers: {num_server_workers}")
+        self.logger.log(logging.INFO, f"Num server workers: {self.num_server_workers}")
         self.logger.log(logging.INFO, f"Num clients per server: {num_clients_per_server}")
         self.logger.log(logging.INFO, f"Assigned Server number: {server_number}")
-        if server_number >= num_server_workers:
+        if server_number >= self.num_server_workers:
             server_number -= 1
-        port = 9900 + server_number
-        self.logger.log(logging.INFO, f"Connecting to port {port}")
+        self.port = 9900 + server_number
         # port = 9900
-        self.client = PolicyClient(
-            f"http://127.0.0.1:{port}", inference_mode="remote", session=session
-        )
+
         self.current_episode_id = ""
         self._first_reward = True
         if self.is_worker:
@@ -229,71 +226,85 @@ class CelesteClient:
         # env we created above) in connection with the PolicyClient to query
         # actions (from the server if "remote"; if "local" we'll compute them
         # on this client side), and send back observations and rewards.
-        try:
+        with requests.Session() as session:
+            try:
+                obs, info = self.env.reset()
 
-            # Start a new episode.
-            obs, info = self.env.reset()
-            self.current_episode_id = self.client.start_episode(training_enabled=True)
-            self.logger.log(logging.INFO, "Started episode, observation: " + str(obs))
-            start_time = time.time()
-            action_count = 0
-            reward_logger = threading.Thread(target=self.log_rewards)
-            reward_logger.start()
-            while True:
-                # Compute an action randomly (off-policy) and log it.
+                # Start a new episode.
+                while self.port < self.port + 100:
+                    try:
+                        self.logger.log(logging.INFO, f"Connecting to port {self.port}")
+                        self.client = PolicyClient(
+                            f"http://127.0.0.1:{self.port}", inference_mode="remote", session=session
+                        )
+                        # test connection
+                        self.current_episode_id = self.client.start_episode(training_enabled=True)
+                        break
+                    except Exception as e:
+                        self.logger.log(logging.ERROR, f"Error connecting to server: {e}")
+                        # workers restarted, move ports up
+                        self.port += self.num_server_workers
 
-                # Compute an action locally or remotely (on server).
-                # No need to log it here as the action
-                # self.logger.log(logging.DEBUG, "Querying action: " + str(episode_id))
-                action_count += 1
-                try:
-                    action = self.client.get_action(self.current_episode_id, obs)
-                except HTTPError as e:
-                    self.logger.log(logging.ERROR, f"HTTP Error when processing observation: {obs}")
-                    self.logger.log(logging.ERROR, f"HTTP Error: {e.reason}")
-                    self.logger.log(logging.ERROR, f"HTTP Error: {e.headers}")
-                    raise e
-                # self.logger.log(logging.DEBUG, "Got action: " + str(action))
-                # Perform a step in the external simulator (env).
+                self.logger.log(logging.INFO, "Started episode, observation: " + str(obs))
+                start_time = time.time()
+                action_count = 0
+                reward_logger = threading.Thread(target=self.log_rewards)
+                reward_logger.start()
+                while True:
+                    # Compute an action randomly (off-policy) and log it.
 
-                obs, reward, terminated, truncated, info = self.env.step(action)
-                self.awaiting_rewards += 1
-                if action_count % 1 == 0:
-                    self.logger.log(logging.DEBUG, f"Reward for Action {action}: {reward}")
-                    # self.logger.log(logging.DEBUG, f"Observation: {obs}")
+                    # Compute an action locally or remotely (on server).
+                    # No need to log it here as the action
+                    # self.logger.log(logging.DEBUG, "Querying action: " + str(episode_id))
+                    action_count += 1
+                    try:
+                        action = self.client.get_action(self.current_episode_id, obs)
+                    except HTTPError as e:
+                        self.logger.log(logging.ERROR, f"HTTP Error when processing observation: {obs}")
+                        self.logger.log(logging.ERROR, f"HTTP Error: {e.reason}")
+                        self.logger.log(logging.ERROR, f"HTTP Error: {e.headers}")
+                        raise e
+                    # self.logger.log(logging.DEBUG, "Got action: " + str(action))
+                    # Perform a step in the external simulator (env).
 
-                self.client.log_returns(self.current_episode_id, np.float64(reward))
-                self.episode_rewards += reward
+                    obs, reward, terminated, truncated, info = self.env.step(action)
+                    self.awaiting_rewards += 1
+                    if action_count % 1 == 0:
+                        self.logger.log(logging.DEBUG, f"Reward for Action {action}: {reward}")
+                        # self.logger.log(logging.DEBUG, f"Observation: {obs}")
 
-                # Log next-obs, rewards, and infos.
-                # self.info_queue.put(info)
-                # self.log_reward()
-                # self.info_queue.join()
-                # self.client.log_returns(episode_id, reward, info=info)
-                # Reset the episode if done.
-                if terminated or truncated:
-                    # wait for all rewards to have been sent
-                    self.logger.log(logging.INFO,
-                                    f"Total reward for episode: {self.episode_rewards}. Episode ended due to: {info}")
-                    end_time = time.time()
-                    self.logger.log(logging.INFO,
-                                    f"Episode took {end_time - start_time} seconds and  {action_count / (end_time - start_time)} actions per second")
+                    self.client.log_returns(self.current_episode_id, np.float64(reward))
+                    self.episode_rewards += reward
+
+                    # Log next-obs, rewards, and infos.
+                    # self.info_queue.put(info)
+                    # self.log_reward()
                     # self.info_queue.join()
+                    # self.client.log_returns(episode_id, reward, info=info)
+                    # Reset the episode if done.
+                    if terminated or truncated:
+                        # wait for all rewards to have been sent
+                        self.logger.log(logging.INFO,
+                                        f"Total reward for episode: {self.episode_rewards}. Episode ended due to: {info}")
+                        end_time = time.time()
+                        self.logger.log(logging.INFO,
+                                        f"Episode took {end_time - start_time} seconds and  {action_count / (end_time - start_time)} actions per second")
+                        # self.info_queue.join()
 
-                    start_time = time.time()
-                    action_count = 0
-                    self.episode_rewards = 0.0
+                        start_time = time.time()
+                        action_count = 0
+                        self.episode_rewards = 0.0
 
-                    # End the old episode.
-                    self.client.end_episode(self.current_episode_id, obs)
-                    # Tell Madeline to do nothing to get the next observation
-                    # Start a new episode.
-                    obs, info = self.env.reset()
-                    self.current_episode_id = self.client.start_episode(training_enabled=True)
-        except Exception as e:
-            with open(self.python_logs_txt, 'a') as f:
-                f.write(str(e))
-                f.write(traceback.format_exc())
+                        # End the old episode.
+                        self.client.end_episode(self.current_episode_id, obs)
+                        # Tell Madeline to do nothing to get the next observation
+                        # Start a new episode.
+                        obs, info = self.env.reset()
+                        self.current_episode_id = self.client.start_episode(training_enabled=True)
+            except Exception as e:
+                with open(self.python_logs_txt, 'a') as f:
+                    f.write(str(e))
+                    f.write(traceback.format_exc())
 
 
 from enum import Enum
@@ -359,8 +370,9 @@ class DummyCelesteClient(CelesteClient):
         # time how long this takes:
         self.num_requests += 1
         action = self.env.action_queue.get()
+        self.logger.log(logging.INFO, f"Dummy Action: {action}")
         self.num_requests -= 1
-
+        self.env.action_queue.put_nowait(action)
         return action
 
     def ext_add_reward(self, reward):
@@ -382,7 +394,7 @@ def record_simulated_input():
     clock = pygame.time.Clock()
     clock.tick(60)
 
-    while len(actions) < 100:
+    while len(actions) < 10:
         clock.tick(5)
         window.fill(0)
         pygame.display.flip()
@@ -413,7 +425,7 @@ def record_simulated_input():
         if pressed_keys[pygame.K_LSHIFT]:
             current_action.grab_action = GrabActionType.Grab
         action = current_action.build()
-        if [int(x) for x in action.tolist()] == [0,0,0,0]:
+        if [int(x) for x in action.tolist()] == [0, 0, 0, 0]:
             continue
         print(action)
         actions.append(action)
