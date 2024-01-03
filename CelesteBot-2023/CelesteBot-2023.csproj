@@ -10,55 +10,65 @@
 		<CelestePrefix>C:\Program Files (x86)\Steam\steamapps\common\Celeste</CelestePrefix>
 
 		<CelestePrefix Condition="'$(CelestePrefix)' == '' And (Exists('..\..\Celeste.exe') Or Exists('..\..\Celeste.dll'))">..\..</CelestePrefix>
-        <CelestePrefix Condition="'$(CelestePrefix)' == '' And (Exists('..\..\..\Celeste.exe') Or Exists('..\..\..\Celeste.dll'))">..\..\..</CelestePrefix>
-        <CelestePrefix Condition="'$(CelestePrefix)' == ''">lib-stripped</CelestePrefix>
+		<CelestePrefix Condition="'$(CelestePrefix)' == '' And (Exists('..\..\..\Celeste.exe') Or Exists('..\..\..\Celeste.dll'))">..\..\..</CelestePrefix>
+		<CelestePrefix Condition="'$(CelestePrefix)' == ''">lib-stripped</CelestePrefix>
 
-         </PropertyGroup>
-    <!--Disable "Copy Local" for all references-->
-    <ItemDefinitionGroup>
-        <PackageReference PrivateAssets="all" ExcludeAssets="runtime" />
-        <Reference Private="false" />
-    </ItemDefinitionGroup>
+	</PropertyGroup>
+	<!--Disable "Copy Local" for all references-->
+	<ItemDefinitionGroup>
+		<PackageReference PrivateAssets="all" ExcludeAssets="runtime" />
+		<Reference Private="false" />
+	</ItemDefinitionGroup>
 
-    <ItemGroup>
-        <PackageReference Include="Desktop.Robot" Version="1.5.0" />
-        <PackageReference Include="MonoMod.RuntimeDetour" Version="22.01.04.03" PrivateAssets="all" ExcludeAssets="runtime" />
-        <PackageReference Include="pythonnet" Version="3.0.3" />
-    </ItemGroup>
 	<ItemGroup>
-		
-        <Reference Include="$(CelestePrefix)\Celeste.dll">
-            <Private>false</Private>
-        </Reference>
-        <Reference Include="$(CelestePrefix)\MMHOOK_Celeste.dll">
-            <Private>false</Private>
-        </Reference>
+		<InternalsAssemblyName Include="Celeste" />
+	</ItemGroup>
+	<PropertyGroup>
+		<InternalsAssemblyUseEmptyMethodBodies>false</InternalsAssemblyUseEmptyMethodBodies>
+	</PropertyGroup>
+	<ItemGroup>
+		<PackageReference Include="Desktop.Robot" Version="1.5.0" />
+		<PackageReference Include="MonoMod.RuntimeDetour" Version="22.01.04.03" PrivateAssets="all" ExcludeAssets="runtime" />
+		<PackageReference Include="pythonnet" Version="3.0.3" />
+	</ItemGroup>
+	<ItemGroup>
+
+		<Reference Include="$(CelestePrefix)\Celeste.dll">
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="$(CelestePrefix)\MMHOOK_Celeste.dll">
+			<Private>false</Private>
+		</Reference>
 
 		<Reference Include="$(CelestePrefix)\FNA.dll">
 			<Private>false</Private>
 		</Reference>
-    </ItemGroup>
 
-    <Target Name="BeforeBuild">
-      <Exec Command='kill $(pgrep -f "$(CelestePrefix)\Celeste.exe\)"' />
-    </Target>
-    <Target Name="CopyFiles" AfterTargets="Build">
-        <Copy SourceFiles="$(OutputPath)\$(AssemblyName).dll" DestinationFolder="$(CelestePrefix)\Mods\CelesteBot\Code" />
-        <Copy SourceFiles="$(OutputPath)\$(AssemblyName).pdb" DestinationFolder="$(CelestePrefix)\Mods\CelesteBot\Code" />
-    </Target>
+		<Reference Include="Randomizer">
+			<HintPath>$(CelestePrefix)\Randomizer\Randomizer.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
+	<Target Name="BeforeBuild">
+		<Exec Command="kill $(pgrep -f &quot;$(CelestePrefix)\Celeste.exe\)&quot;" />
+	</Target>
+	<Target Name="CopyFiles" AfterTargets="Build">
+		<Copy SourceFiles="$(OutputPath)\$(AssemblyName).dll" DestinationFolder="$(CelestePrefix)\Mods\CelesteBot\Code" />
+		<Copy SourceFiles="$(OutputPath)\$(AssemblyName).pdb" DestinationFolder="$(CelestePrefix)\Mods\CelesteBot\Code" />
+	</Target>
 	<Target Name="PostBuildScript" AfterTargets="AfterBuild">
 		<PropertyGroup>
 			<BuildCommand>move_dll.bat</BuildCommand>
 		</PropertyGroup>
 		<Exec Command="call $(BuildCommand)" ConsoleToMSBuild="true" LogStandardErrorAsError="true" WorkingDirectory="$(ProjectDir)" />
 	</Target>
-    <PropertyGroup>
-        <PathMap>$(MSBuildProjectDirectory)=CelesteBot_2023/</PathMap>
-    </PropertyGroup>
-    
-    <PropertyGroup>
-        <ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    </PropertyGroup>
+	<PropertyGroup>
+		<PathMap>$(MSBuildProjectDirectory)=CelesteBot_2023/</PathMap>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>None</ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
 
 </Project>

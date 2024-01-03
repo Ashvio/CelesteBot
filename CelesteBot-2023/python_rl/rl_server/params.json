@@ -16,7 +16,6 @@
   "always_attach_evaluation_results": false,
   "auto_wrap_old_gym_envs": true,
   "batch_mode": "truncate_episodes",
-  "callbacks": "<class 'ray.rllib.algorithms.callbacks.DefaultCallbacks'>",
   "checkpoint_trainable_policies_only": false,
   "clip_actions": false,
   "clip_param": 0.10000000149011612,
@@ -56,7 +55,6 @@
   "grad_clip_by": "global_norm",
   "ignore_worker_failures": false,
   "in_evaluation": false,
-  "input": "<function _input at 0x000002089C444A60>",
   "keep_per_episode_custom_metrics": false,
   "kl_coeff": 0.2,
   "kl_target": 0.01,
@@ -163,16 +161,7 @@
   },
   "normalize_actions": true,
   "num_consecutive_worker_failures_tolerance": 100,
-  "num_cpus_for_driver": 1,
-  "num_cpus_per_learner_worker": 1,
-  "num_cpus_per_worker": 4,
-  "num_envs_per_worker": 1,
-  "num_gpus": 0.33,
-  "num_gpus_per_learner_worker": 0.33,
-  "num_gpus_per_worker": 0,
-  "num_learner_workers": 0,
   "num_sgd_iter": 10,
-  "num_workers": 1,
   "observation_filter": "NoFilter",
   "observation_fn": null,
   "observation_space": "Dict('can_dash': MultiBinary(1), 'is_climbing': MultiBinary(1), 'map_entities_vision': Box(0, 255, (40, 40, 1), uint8), 'on_ground': MultiBinary(1), 'position': Box(-50000.0, 50000.0, (2,), float32), 'speed_x_y': Box(-1000.0, 1000.0, (2,), float16), 'stamina': Box(-10.0, 10.0, (1,), float32), 'target': Box(-50000.0, 50000.0, (2,), float32))",
@@ -196,7 +185,6 @@
   "policies_to_train": null,
   "policy_map_cache": -1,
   "policy_map_capacity": 100,
-  "policy_mapping_fn": "<function AlgorithmConfig.DEFAULT_POLICY_MAPPING_FN at 0x0000020898A69820>",
   "policy_states_are_swappable": false,
   "postprocess_inputs": false,
   "preprocessor_pref": "deepmind",
@@ -209,7 +197,6 @@
   "rl_module_spec": null,
   "rollout_fragment_length": "auto",
   "sample_async": false,
-  "sample_collector": "<class 'ray.rllib.evaluation.collectors.simple_list_collector.SimpleListCollector'>",
   "sampler_perf_stats_ema_coef": null,
   "seed": null,
   "sgd_minibatch_size": 64,
@@ -218,18 +205,7 @@
   "simple_optimizer": -1,
   "sync_filters_on_rollout_workers_timeout_s": 60.0,
   "synchronize_filters": -1,
-  "tf_session_args": {
-    "allow_soft_placement": true,
-    "device_count": {
-      "CPU": 1
-    },
-    "gpu_options": {
-      "allow_growth": true
-    },
-    "inter_op_parallelism_threads": 2,
-    "intra_op_parallelism_threads": 2,
-    "log_device_placement": false
-  },
+
   "torch_compile_learner": false,
   "torch_compile_learner_dynamo_backend": "inductor",
   "torch_compile_learner_dynamo_mode": null,

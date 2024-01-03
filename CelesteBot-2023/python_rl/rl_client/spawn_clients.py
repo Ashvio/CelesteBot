@@ -73,7 +73,7 @@ if __name__ == "__main__":
         processes.append(p)
         time.sleep(0.25)
     # Wait for processes to open windows
-    time.sleep(2.5 * args.num_workers)
+    time.sleep(max(3 * args.num_workers, 12))
     x = 0
     y = 0
     print(f"Moving {args.num_workers} windows")
@@ -113,6 +113,25 @@ if __name__ == "__main__":
 
         window.set_focus()
         window.set_keyboard_focus()
+        time.sleep(2)
+
+        gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+        gamepad.update()
+
+        time.sleep(0.1)
+        gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+
+        # gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+        time.sleep(1)
+        # move down to Randomizer
+        print('down')
+        gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN)
+        gamepad.update()
+        time.sleep(0.1)
+
+        gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN)
+        gamepad.update()
+        print('spam')
         for i in range(15):
             # Start the game
             time.sleep(0.05)
@@ -121,3 +140,6 @@ if __name__ == "__main__":
             time.sleep(0.05)
             gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
             gamepad.update()
+            time.sleep(0.05)
+        gamepad.reset()
+        time.sleep(2)

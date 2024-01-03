@@ -22,6 +22,7 @@ You may connect more than one policy client to any open listen port.
 """
 
 import argparse
+import json
 import logging
 import os
 import pathlib
@@ -33,12 +34,13 @@ import socket
 
 import ray
 from ray import tune, air
-from ray.air import RunConfig, ScalingConfig, CheckpointConfig
+from ray.air import RunConfig, ScalingConfig, CheckpointConfig, FailureConfig
 from ray.rllib.algorithms import Algorithm
 from ray.rllib.algorithms.ppo import PPOConfig, PPO
 from ray.rllib.env.policy_server_input import PolicyServerInput
 from ray.rllib.evaluation.collectors.sample_collector import SampleCollector
 from ray.rllib.examples.custom_metrics_and_callbacks import MyCallbacks
+from ray.train import SyncConfig
 from ray.tune import sample_from, run
 from ray.tune.logger import pretty_print
 from ray.tune.registry import get_trainable_cls
@@ -150,9 +152,7 @@ def get_cli_args():
     return args
 
 
-NUM_WORKERS = 3
-
-
+NUM_WORKERS = 2
 
 if __name__ == "__main__":
     args = get_cli_args()
@@ -160,34 +160,47 @@ if __name__ == "__main__":
 
     PORT = 9900
     BASE_PATH = "C:\projects\CelesteBot\CelesteBot-2023"
+
+
     def try_makedirs(path):
         try:
             os.makedirs(os.path.join(BASE_PATH, path))
             return True
         except OSError:
             return False
+
+
     def try_rm_dirs(path):
         try:
             os.rmdir(os.path.join(BASE_PATH, path))
             return True
         except OSError:
             return False
+
+
     # `InputReader` generator (returns None if no input reader is needed on
     # the respective worker).
     def _input(ioctx):
         # We are remote worker or we are local worker with num_workers=0:
         # Create a PolicyServerInput.
-        if ioctx.worker_index >= 0 or ioctx.worker.num_workers == 0:
+        if ioctx.worker_index > 0 or ioctx.worker.num_workers == 0:
             base_port = PORT
+            # lock the port
             while not try_makedirs(str(base_port)):
                 base_port += 1
-            return PolicyServerInput(
+            p = PolicyServerInput(
                 ioctx,
                 SERVER_ADDRESS,
-                base_port + ioctx.worker_index - (1 if ioctx.worker_index > 0 else 0),
-                idle_timeout=0.025,
+                base_port ,
+                #+ ioctx.worker_index - (1 if ioctx.worker_index > 0 else 0),
+                idle_timeout=0.25,
                 max_sample_queue_size=1000000
             )
+            import time
+            time.sleep(5)
+            # unlock port in case this worker crashes
+            try_rm_dirs(str(base_port))
+            return p
         # No InputReader (PolicyServerInput) needed.
         else:
             return None
@@ -220,15 +233,15 @@ if __name__ == "__main__":
         .framework("torch")
         .resources(
             # num_cpus_per_worker=10 // (NUM_WORKERS * NUM_TRIALS),
-            # num_cpus_per_worker=1,
+            num_cpus_per_worker=4,
             # local_gpu_idx=0,
             # num_cpus_for_local_worker=1,
             # num_cpus_per_learner_worker=1,
-            # num_gpus_per_learner_worker=0.2,
-            num_gpus_per_worker=1 / (NUM_WORKERS),
+            num_gpus_per_learner_worker=0.33,
+            # num_gpus_per_worker=0.33,
             # num_gpus_per_worker=0.05,
             # num_learner_workers=1
-            # num_gpus=1,
+            # num_gpus=0.25,
         )
         # Create a "chatty" client/server or not.
         # .callbacks(MyCallbacks if args.callbacks_verbose else None)
@@ -236,7 +249,7 @@ if __name__ == "__main__":
         .offline_data(input_=_input, offline_sampling=False, shuffle_buffer_size=0)
         # Use n worker processes to listen on different ports.
         .rollouts(
-            num_rollout_workers=0,
+            num_rollout_workers=1,
             # Connectors are not compatible with the external env.
             enable_connectors=False,
             # create_env_on_local_worker=True,
@@ -260,12 +273,14 @@ if __name__ == "__main__":
         "lambda": [0.9, 1.0],
         "clip_param": [0.1, 0.2],
         "lr": [1e-5, 1e-3],
+        "train_batch_size":  [128, 1024],
+        "entropy_coeff": [1e-3, 1e-1],
     }
     pb2 = PB2(
         time_attr="timesteps_total",
         metric="episode_reward_mean",
         mode="max",
-        perturbation_interval=50000,
+        perturbation_interval=5000,
         quantile_fraction=0.25,  # copy bottom % with top %
         # Specifies the hyperparam search space
         hyperparam_bounds=hyper_parameter_ranges
@@ -274,32 +289,36 @@ if __name__ == "__main__":
         {
             # "enable_connectors": False,
             # "num_cpus": 22,
-            "num_workers": 0,
+            "num_workers": 1,
             "model": {
                 "use_lstm": False,
                 "use_attention": True,
                 "dim": CelesteEnv.VISION_SIZE,
-                "conv_filters": [[16, [3, 3], 2], [32, [3, 3], 2], [64, [3, 3], 1], [128, [3, 3], 1]],
-                "attention_dim": 128,
-                "attention_head_dim": 64,
-                "attention_num_transformer_units": 3,
-                "attention_memory_inference": 100,
-                "attention_memory_training": 100,
-                "attention_num_heads": 3,
+                "conv_filters": [[16, [3, 3], 2], [32, [3, 3], 2], [64, [3, 3], 1]],
+                "attention_dim": 256,
+                "attention_head_dim": 128,
+                "attention_num_transformer_units": 6,
+                "attention_memory_inference": 50,
+                "attention_memory_training": 50,
+                "attention_num_heads": 6,
+                # "attention_use_n_prev_actions": 4,
+                # "attention_use_n_prev_rewards": 4,
                 # "attention_use_n_prev_actions": 6,
                 # "entropy_coeff_schedule": [[0, 1e-3]]
             },
-            "entropy_coeff": 1e-2,
+            "normalize_actions": False,
             "count_steps_by": "env_steps",
             "num_sgd_iter": 10,
             "sgd_minibatch_size": 64,
+            # "entropy_coeff": sample_from(lambda spec: tune.loguniform(*hyper_parameter_ranges["entropy_coeff"])),
             "gamma": sample_from(lambda spec: random.uniform(*hyper_parameter_ranges["gamma"])),
             # "lambda": sample_from(lambda spec: random.uniform(0.9, 1.0)),
-            "lambda": 0.96,
+            "lambda": sample_from(lambda spec: random.uniform(*hyper_parameter_ranges["lambda"])),
             "clip_param": sample_from(lambda spec: random.uniform(*hyper_parameter_ranges["clip_param"])),
-            # "lr": sample_from(lambda spec: random.uniform(1e-3, 1e-5)),
+            # "lr": sample_from(lambda spec: tune.loguniform(*hyper_parameter_ranges["lr"])),
             "train_batch_size": 512,
-            "lr_schedule": [[0, 1e-3], [100000, 1e-4], [10000000, 1e-5]],
+            # "train_batch_size": sample_from(lambda spec: tune.randint(*hyper_parameter_ranges["train_batch_size"])),
+            # "lr_schedule": [[0, 1e-3], [100000, 1e-4], [10000000, 1e-5]],
             # "normalize_actions": False
         }
     )
@@ -307,48 +326,101 @@ if __name__ == "__main__":
     # Attempt to restore from checkpoint, if possible.
     # Attempt to restore from checkpoint, if possible.
     checkpoint_path = ""
+    time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     if not args.no_restore and os.path.exists(LAST_CHECKPOINT_FILE):
         checkpoint_path = open(LAST_CHECKPOINT_FILE).read()
-    # Manual training loop (no Ray tune).
-    if args.no_tune:
-        algo = config.build()
+    stop = {
+        "training_iteration": 2e7,
+        "episode_reward_mean": 400,
+    }
+    failure_config = FailureConfig(max_failures=3)
+    sync_config = SyncConfig(sync_artifacts=True)
+    checkpoint_config = CheckpointConfig(num_to_keep=3, checkpoint_score_attribute="episode_reward_mean",
+                                         checkpoint_frequency=100)
+    run_config = RunConfig(stop=stop, verbose=2, name=f"CelesteBot_{time}", log_to_file=True,
+                           failure_config=failure_config,
+                           sync_config=sync_config,
+                           storage_path=f"C:\projects\CelesteBot\CelesteBot-2023\checkpoints",
+                           # checkpoint_config=checkpoint_config
 
-        if checkpoint_path:
-            print("Restoring from checkpoint path", checkpoint_path)
-            try:
-                algo.restore(checkpoint_path)
-            except Exception as e:
-                logging.log(logging.ERROR, "Failed to restore from checkpoint path " + checkpoint_path)
-                logging.log(logging.ERROR, e)
+                           )
+    # Manual training loop (no Ray tune).
+    MAX_TIMESTEPS = 1000000
+    if args.policy_checkpoint:
+        params = json.load(open(r"C:\projects\CelesteBot\CelesteBot-2023\python_rl\rl_server\params.json", "r"))
+        config.update_from_dict(params)
+
+        update = {
+            "num_workers": 2,
+            "num_rollout_workers": 2,
+            "num_gpus_per_worker": 0.25,
+            "observation_space": env.observation_space,
+            "action_space": env.action_space,
+        }
+        # from .util import strip_optimizer
+        #
+        # strip_optimizer(args.policy_checkpoint)
+        config.update_from_dict(update)
+        # algo = config.build()
+
+        print("Restoring from checkpoint path", checkpoint_path)
+        # try:
+        #     algo.restore(args.policy_checkpoint)
+        # except Exception as e:
+        #     logging.log(logging.ERROR, "Failed to restore from checkpoint path " + checkpoint_path)
+        #     logging.log(logging.ERROR, e)
 
         # Serving and training loop.
         ts = 0
+        tune_config = tune.TuneConfig(num_samples=1, reuse_actors=False, )
+        resources = tune.PlacementGroupFactory([{"CPU": 4, "GPU": 0}, {"CPU": 4, "GPU": 0.25}, {"CPU": 4, "GPU": 0.25}],
+                                               strategy="SPREAD")
 
-        while True:
 
-            results = algo.train()
-            print(pretty_print(results))
-            checkpoint = algo.save().checkpoint
-            print("Last checkpoint", checkpoint)
-            # copy file with same name to path
-            logging.log(logging.INFO, "Copying checkpoint to " + CHECKPOINT_BASE_PATH)
-            path = pathlib.PurePath(checkpoint_path)
+        class TrainablePPO(PPO):
+            def setup(self, config):
+                self.config = config
 
-            shutil.copytree(checkpoint.path, os.path.join(CHECKPOINT_BASE_PATH, path.name), dirs_exist_ok=True)
-            with open(LAST_CHECKPOINT_FILE, "w") as f:
-                f.write(checkpoint.path)
+                super().setup(config)
 
-            if ts >= args.stop_timesteps:
-                break
-            ts += results["timesteps_total"]
+                self.load_checkpoint(args.policy_checkpoint)
 
-        algo.stop()
+
+        # algo = TrainablePPO.from_checkpoint(args.policy_checkpoint)
+        trainable = tune.with_resources(TrainablePPO, resources)
+
+        tuner = tune.Tuner(
+            TrainablePPO,
+            tune_config=tune_config,
+            param_space=config,
+            run_config=run_config,
+            # stop=stop,
+            # name=f"CelesteBot_{time}"
+        ).fit()
+        # while True:
+        #
+        #     results = algo.train()
+        #     print(pretty_print(results))
+        #     checkpoint = algo.save().checkpoint
+        #     print("Last checkpoint", checkpoint)
+        #     # copy file with same name to path
+        #     logging.log(logging.INFO, "Copying checkpoint to " + CHECKPOINT_BASE_PATH)
+        #     path = pathlib.PurePath(checkpoint_path)
+        #
+        #     shutil.copytree(checkpoint.path, os.path.join(CHECKPOINT_BASE_PATH, path.name), dirs_exist_ok=True)
+        #     with open(LAST_CHECKPOINT_FILE, "w") as f:
+        #         f.write(checkpoint.path)
+        #
+        #     if ts >= MAX_TIMESTEPS:
+        #         break
+        #     ts += results["timesteps_total"]
+        #
+        # algo.stop()
 
     # Run with Tune for auto env and algo creation and TensorBoard.
     else:
         print("Ignoring restore even if previous checkpoint is provided...")
-
 
         logging.getLogger('requests').setLevel(logging.WARN)
         # TODO: Figure out why connections keep closing (HTTP BaseHandler is 1.0 not 1.1)
@@ -356,12 +428,10 @@ if __name__ == "__main__":
         logging.getLogger('urllib3').setLevel(logging.WARN)
         NUM_TRAINER_WORKERS = 3
         NUM_SAMPLES = 3
-        if args.policy_checkpoint:
-            trainable = Algorithm.from_checkpoint(args.policy_checkpoint).train
-            tune.register_trainable("PPO", trainable.train)
-            print(trainable)
+        tune_config = tune.TuneConfig(scheduler=pb2, num_samples=NUM_SAMPLES, reuse_actors=False, )
+
         ppo = _get_trainable("PPO")
-        resources = tune.PlacementGroupFactory([{"CPU": 4, "GPU": 0.33}], strategy="SPREAD")
+        resources = tune.PlacementGroupFactory([{"CPU": 2, "GPU": 0.33}, {"CPU": 4, }], strategy="SPREAD")
         trainable = tune.with_resources(ppo, resources)
 
         # ScalingConfig(
@@ -377,26 +447,21 @@ if __name__ == "__main__":
         # ))
         # tune.Tuner.restocre(r"C:\Users\Ashvin\ray_results\PPO_2023-11-01_00-23-59","PPO", param_space=config,).fit()
         base_port = PORT
-        stop = {
-            "training_iteration": 2e7,
-            "episode_reward_mean": 400,
-        }
+
         import sys
 
         sys.stdout.isatty = lambda: False
         while try_rm_dirs(str(base_port)):
             base_port += 1
         try:
-            time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-            tune_config = tune.TuneConfig(scheduler=pb2, num_samples=NUM_SAMPLES, )
-            checkpoint_config = CheckpointConfig(num_to_keep=3, checkpoint_score_attribute="episode_reward_mean", checkpoint_frequency=100000)
-            run_config = RunConfig(stop=stop, verbose=2, name=f"CelesteBot_{time}", log_to_file=True, checkpoint_config=checkpoint_config)
+
             if args.resume_tuner_checkpoint:
                 # analysis = run(
                 #     trainable_with_resources, config=config, scheduler=pb2, stop=stop, verbose=1, resume=True,
                 #     name=args.resume_checkpoint, num_samples=3
                 # )
-                tuner = tune.Tuner.restore(args.resume_tuner_checkpoint, trainable, param_space=config, restart_errored=True).fit()
+                tuner = tune.Tuner.restore(args.resume_tuner_checkpoint, trainable, param_space=config,
+                                           restart_errored=True).fit()
             else:
 
                 tuner = tune.Tuner(
