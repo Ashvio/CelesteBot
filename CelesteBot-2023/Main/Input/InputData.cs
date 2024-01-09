@@ -8,7 +8,6 @@ namespace CelesteBot_2023
         public static int LongJumpFrameCount = 20;
         public static int LongJumpRemainingTimer = 0;
         public static double LongJumpPersistentValue = 0;
-        public static int LastIndex = 0;
 
         public float MoveX;
         public float MoveY;
@@ -37,30 +36,32 @@ namespace CelesteBot_2023
             //this.QuickRestart = actions[5] > CelesteBotManager.ACTION_THRESHOLD;
             //LongJumpValue = actions[5];
             //bool LongJump = Math.Abs(actions[5]) > CelesteBotManager.ACTION_THRESHOLD;
-            //if (LongJumpRemainingTimer > 0 && CelesteBotInteropModule.CurrentPlayer.GetHashCode() == LastIndex)
-            //{
-            //    Jump = true;
-            //    LongJumpRemainingTimer--;
-            //    LongJumpValue = LongJumpPersistentValue;
-            //    //JumpValue = LongJumpPersistentValue;
-            //}
-            //else if (LongJumpRemainingTimer > 0)
-            //{
-            //    LongJumpRemainingTimer = 0;
-            //}
-            //else if (LongJump && LongJumpRemainingTimer == 0)
-            //{
-            //    Jump = true;
-            //    LongJumpRemainingTimer = LongJumpFrameCount;
-            //    LongJumpPersistentValue = LongJumpValue;
-            //    //JumpValue = LongJumpValue;
 
             //    LastIndex = CelesteBotInteropModule.CurrentPlayer.GetHashCode();
 
             //}
+            if (LongJumpRemainingTimer > 0)
+            {
+                Jump = true;
+                LongJumpRemainingTimer--;
+                //LongJumpValue = LongJumpPersistentValue;
+                //JumpValue = LongJumpPersistentValue;
+            }
+            
         }
 
-        public InputData() { }
+        public InputData()
+        {
+            if (LongJumpRemainingTimer > 0)
+            {
+                Jump = true;
+                LongJumpRemainingTimer--;
+                //LongJumpValue = LongJumpPersistentValue;
+                //JumpValue = LongJumpPersistentValue;
+            }
+        }
+
+
         public void UpdateData(Action action)
         {
             //when using a keyboard, Input.MoveX.Value is -1 when pressing left, 1 when pressing right, 0 otherwise. (same applies for Input.MoveY.Value)
@@ -69,8 +70,30 @@ namespace CelesteBot_2023
 
             // + or - actions allow for buttons
             Jump = action.GetJump();
+            bool LongJump = action.GetLongJump();
             Dash = action.GetDash();
             Grab = action.GetGrab();
+            MenuConfirm = action.GetMenuConfirm();
+            MenuDown = action.GetMenuDown();
+            Pause = action.GetPause();
+            if (LongJumpRemainingTimer > 0)
+            {
+                Jump = true;
+                LongJumpRemainingTimer--;
+                //LongJumpValue = LongJumpPersistentValue;
+                //JumpValue = LongJumpPersistentValue;
+            }
+            else if (LongJump && LongJumpRemainingTimer == 0)
+            {
+                Jump = true;
+                LongJumpRemainingTimer = LongJumpFrameCount;
+                //LongJumpPersistentValue = LongJumpValue;
+                //JumpValue = LongJumpValue;
+            }
+            if (Dash)
+            {
+                Aim = new Vector2(MoveX, MoveY);
+            }
         }
         public bool ESC
         {
@@ -83,6 +106,19 @@ namespace CelesteBot_2023
                 Buttons &= (int)~ButtonMask.ESC;
                 if (value)
                     Buttons |= (int)ButtonMask.ESC;
+            }
+        }
+        public bool Pause
+        {
+            get
+            {
+                return (Buttons & (int)ButtonMask.Pause) == (int)ButtonMask.Pause;
+            }
+            set
+            {
+                Buttons &= (int)~ButtonMask.Pause;
+                if (value)
+                    Buttons |= (int)ButtonMask.Pause;
             }
         }
         public bool MenuConfirm
@@ -150,6 +186,8 @@ namespace CelesteBot_2023
                     Buttons |= (int)ButtonMask.Jump;
             }
         }
+
+
         public bool Dash
         {
             get
@@ -193,7 +231,7 @@ namespace CelesteBot_2023
         {
             string outp = "InputData: (x,y): (" + MoveX + ", " + MoveY + ") + buttons: (";
             string[] names = Enum.GetNames(typeof(ButtonMask));
-            System.Array values = Enum.GetValues(typeof(ButtonMask));
+            Array values = Enum.GetValues(typeof(ButtonMask));
             for (int i = 0; i < names.Length; i++)
             {
                 if ((Buttons & (int)values.GetValue(i)) == (int)values.GetValue(i))
@@ -218,7 +256,8 @@ namespace CelesteBot_2023
             Jump = 1 << 6,
             Dash = 1 << 7,
             Grab = 1 << 8,
-            Talk = 1 << 9 // shouldn't really be needed
+            Talk = 1 << 9, // shouldn't really be needed
+            Pause = 1 << 10
         }
     }
 }

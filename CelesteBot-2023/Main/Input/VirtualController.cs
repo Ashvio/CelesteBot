@@ -2,7 +2,7 @@
 using Monocle;
 namespace CelesteBot_2023
 {
-    public class InputNodes
+    public class VirtualController
     {
         // May eventually deprecate this class, as can just modify value directly
         public class MoveX : VirtualAxis.Node
@@ -52,8 +52,10 @@ namespace CelesteBot_2023
                 Mask = (int)mask;
             }
             public override bool Check => !MInput.Disabled && (Player.Data.Buttons & Mask) == Mask;
-            public override bool Pressed => !MInput.Disabled && (Player.Data.Buttons & Mask) == Mask && (Player.LastData.Buttons & Mask) == 0;
-            public override bool Released => !MInput.Disabled && (Player.Data.Buttons & Mask) == 0 && (Player.LastData.Buttons & Mask) == Mask;
+            public override bool Pressed => !MInput.Disabled && (Player.Data.Buttons & Mask) == Mask;
+            //&& (Player.LastData.Buttons & Mask) == 0;
+            public override bool Released => !MInput.Disabled && (Player.Data.Buttons & Mask) == 0;
+                //&& (Player.LastData.Buttons & Mask) == Mask;
         }
     }
 }
