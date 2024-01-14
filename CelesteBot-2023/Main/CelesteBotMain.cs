@@ -19,14 +19,14 @@ namespace CelesteBot_2023
 
         public static string ModLogKey = "celeste-bot";
 
-        public static CelesteBotRunner AIPlayer;
+        public static CelesteBotRunner BotRunner;
 
         public static readonly int VISION_2D_X_SIZE = 20; // X Size of the Vision array
         public static readonly int VISION_2D_Y_SIZE = 20; // Y Size of the Vision array
         public static int TILE_2D_X_CACHE_SIZE = 1000;
         public static int TILE_2D_Y_CACHE_SIZE = 1000;
         public static int ENTITY_CACHE_UPDATE_FRAMES = 10;
-        public static int FAST_MODE_MULTIPLIER = 10;
+        public static int FAST_MODE_MULTIPLIER { get => Settings.FastModeMultiplier;  }
 
         public static float UPDATE_TARGET_THRESHOLD = 25; // Pixels in distance between the fitness target and the current position before considering it "reached"
 
@@ -38,7 +38,7 @@ namespace CelesteBot_2023
         // Learning
         public static bool AIEnabled = false;
 
-        public static int FrameLoops = 1;
+        public static int FrameLoops;
         internal static State BotState = State.None;
 
         public static bool IsWorker { get; set; }
@@ -83,7 +83,6 @@ namespace CelesteBot_2023
         {
             Logger.Log(ModLogKey, "CELESTEBOT Initializing");
 
-            PythonNETManager.Setup();
             string currentDir = Directory.GetCurrentDirectory();
             if (currentDir.Contains("CelesteWorkers"))
             {
@@ -101,7 +100,6 @@ namespace CelesteBot_2023
             TILE_2D_X_CACHE_SIZE = Settings.XMaxCacheSize; // X Size of max cache size
             TILE_2D_Y_CACHE_SIZE = Settings.YMaxCacheSize; // Y Size of max cache size
             ENTITY_CACHE_UPDATE_FRAMES = Settings.EntityCacheUpdateFrames; // Frames between updating entity cache
-            FAST_MODE_MULTIPLIER = Settings.FastModeMultiplier; // speed multiplier for fast mode
 
 
             UPDATE_TARGET_THRESHOLD = Settings.UpdateTargetThreshold;
@@ -115,15 +113,10 @@ namespace CelesteBot_2023
         }
         public override void Initialize()
         {
-            base.Initialize();
             AttributeUtils.Invoke<InitializeAttribute>();
-            // Hey, InputPlayer should be made to work without removing self when players die
-            inputPlayer = new InputPlayer(Celeste.Celeste.Instance, new InputData()); // Blank InputData when constructing. Overwrite it when needing to update inputs
-            Celeste.Celeste.Instance.Components.Add(inputPlayer);
-            AIPlayer = new CelesteBotRunner();
-            //GeneratePlayer();
-            FrameLoops = IsWorker ? FAST_MODE_MULTIPLIER : 1;
+            BotRunner = new CelesteBotRunner();
             InitializeData();
+            FrameLoops = IsWorker ? FAST_MODE_MULTIPLIER : 1;
         }
 
         public override void Unload()
@@ -143,7 +136,7 @@ namespace CelesteBot_2023
         private bool Player_ClimbCheck(On.Celeste.Player.orig_ClimbCheck orig, Player self, int dir, int yAdd)
         {
             bool result = orig(self, dir, yAdd);
-            AIPlayer.Episode.IsClimbing = result;
+            BotRunner.Episode.IsClimbing = result;
             return result;
         }
 
@@ -154,9 +147,8 @@ namespace CelesteBot_2023
             if (BotState == State.Running && Settings.DrawAlways)
             {
                 Draw.SpriteBatch.Begin();
-                DrawMetrics.Draw(AIPlayer);
+                DrawMetrics.Draw(BotRunner);
                 Draw.SpriteBatch.End();
-
             }
         }
 
@@ -178,7 +170,7 @@ namespace CelesteBot_2023
 
             HandleKB();
 
-            bool actioned = AIPlayer.HandleEdgeCases(nextInput);
+            bool actioned = BotRunner.HandleEdgeCases(nextInput);
             if (actioned)
             {
                 // Handled an edge case so move on
@@ -186,7 +178,7 @@ namespace CelesteBot_2023
                 return;
             }
 
-            AIPlayer.TryUpdateGameState(nextInput);
+            BotRunner.TryUpdateGameState(nextInput);
             original();
         }
         static bool HandleKB()
@@ -321,13 +313,17 @@ namespace CelesteBot_2023
 
         public static void OnScene_Transition(On.Celeste.Celeste.orig_OnSceneTransition original, Celeste.Celeste self, Scene last, Scene next)
         {
+            IsTransitioning = true;
+
             original(self, last, next);
-            if (!AIPlayer.VisionSetup)
+            if (!BotRunner.VisionSetup)
             {
-                AIPlayer.SetupVision();
+                BotRunner.SetupVision();
             }
             //TileFinder.GetAllEntities();
             ResetRooms();
+            IsTransitioning = false;
+
         }
         private static void ResetRooms()
         {

@@ -1,5 +1,6 @@
 ﻿using Celeste;
 using Celeste.Mod;
+using CelesteBot_2023.SimplifiedGraphics;
 using Microsoft.Xna.Framework;
 using Monocle;
 using System;
@@ -42,24 +43,27 @@ namespace CelesteBot_2023
 
         public static Vector2 TilesOffset = new(0, 0); // TilesOffset for SolidsData offset
 
-        private static int framesToCacheWipe = CelesteBotMain.ENTITY_CACHE_UPDATE_FRAMES;
+        private static int framesToCacheWipe;
         private static Level cachedLevel;
         private static Vector2 cacheOffset = new(CelesteBotMain.TILE_2D_X_CACHE_SIZE / 2, CelesteBotMain.TILE_2D_Y_CACHE_SIZE / 2);
         private static Entity[,] tileCache = new Entity[CelesteBotMain.TILE_2D_X_CACHE_SIZE, CelesteBotMain.TILE_2D_Y_CACHE_SIZE];
         private static int[,] entityCache = new int[CelesteBotMain.TILE_2D_X_CACHE_SIZE, CelesteBotMain.TILE_2D_Y_CACHE_SIZE];
-        static Dictionary<Type, int> platformTypes;
+        private static Dictionary<Type, int> EntityTypes;
 
         [CelesteBotMain.Initialize]
         public static void Load()
         {
 
-
+            framesToCacheWipe = 60 / CelesteBotMain.Settings.CalculationsPerSecond;
             List<Type> entityTypes = typeof(Monocle.Entity).Assembly.GetTypes().Where(type => type.IsSubclassOf(typeof(Monocle.Entity))).ToList();
             List<Type> platformList = typeof(Platform).Assembly.GetTypes().Where(type => type.IsSubclassOf(typeof(Platform))).ToList();
-            platformTypes = new();
-            for (int i = 0; i < platformList.Count; i++)
+            List<Type> actorTypes = typeof(Actor).Assembly.GetTypes().Where(type => type.IsSubclassOf(typeof(Actor))).ToList();
+            List<Type> otherTypes = new List<Type> { typeof(Celeste.CoverupWall), typeof(Celeste.FakeWall) };
+            List<Type> allTypes = platformList.Concat(actorTypes).ToList().Concat(otherTypes).ToList();
+            EntityTypes = new();
+            for (int i = 0; i < allTypes.Count; i++)
             {
-                platformTypes.Add(platformList[i], i);
+                EntityTypes.Add(allTypes[i], i);
             }
             // Make vision a shape 3 index, first channel = platform, second channel = other types
             //CelesteBotManager.Log("Entities: " + entityTypes.ToString());
@@ -208,14 +212,14 @@ namespace CelesteBot_2023
             }
 
         }
-        public static int TryGetPlatformEntityValue(Type entityType)
+        public static int TryGetEntityValue(Type entityType)
         {
 
 
-            bool success = platformTypes.TryGetValue(entityType, out int result);
+            bool success = EntityTypes.TryGetValue(entityType, out int result);
             if (success)
                 {
-                    return result + 20;
+                    return result + 25;
                 }
                 else
                 {
@@ -226,24 +230,31 @@ namespace CelesteBot_2023
         public static void CacheEntities()
         {
 
-            if (framesToCacheWipe > 0)
-            {
-                framesToCacheWipe--;
-                return;
-            }
+            //if (framesToCacheWipe > 0)
+            //{
+            //    framesToCacheWipe--;
+            //    return;
+            //}
 
             entityCache = new int[tileCache.GetLength(0), tileCache.GetLength(1)];
 
             EntityList entities = Engine.Scene.Entities;
             for (int i = 0; i < entities.Count; i++)
             {
-                if (entities[i].Collidable && entities[i].Collider != null && entities[i] is not SolidTiles && entities[i] is not Player)
+                Monocle.Entity currentEntity = entities[i];
+                if (currentEntity.Collidable && currentEntity.Collider != null && currentEntity is not SolidTiles && currentEntity is not Player)
                 {
                     //Logger.Log(LogLevel.Debug, "BOT_TEST", entities[i].GetType().ToString());
                     int entityIndex;
-                    if (!Enum.TryParse(entities[i].GetType().ToString().Substring(8), out Entity entityType))
+
+                    if (currentEntity.GetType().IsSameOrSubclassOf(typeof(Celeste.Trigger)))
                     {
-                        entityIndex = TryGetPlatformEntityValue(entities[i].GetType());
+                        entityIndex = (int)Entity.Air;
+                    }
+                    else if (!Enum.TryParse(currentEntity.GetType().ToString().Substring(8), out Entity entityType))
+                    {
+                        entityIndex = TryGetEntityValue(currentEntity.GetType());
+                        
                         //CelesteBotManager.Log("Platform Entity: " + entityIndex);
                         //Logger.Log(LogLevel.Debug, "celeste-bot", "Entity of type " + entities[i].GetType() + " not handled, add it to the Entity enum in TileFinder.cs");
                     }
@@ -251,7 +262,11 @@ namespace CelesteBot_2023
                     {
                         entityIndex = (int)entityType;
                     }
-                    Rectangle rect = entities[i].Collider.Bounds;
+                    if (entityIndex == (int)Entity.Other)
+                    {
+                        CelesteBotMain.Log("Entity of type " + entities[i].GetType() + " not handled.", LogLevel.Warn);
+                    }
+                    Rectangle rect = currentEntity.Collider.Bounds;
                     //Logger.Log(LogLevel.Debug, "BOT_TEST", rect.Left.ToString() + " " + rect.Right.ToString() + " " + rect.Bottom.ToString() + " " + rect.Top.ToString());
                     int j = rect.Left;
                     if (j % 8 == 0)
@@ -284,7 +299,7 @@ namespace CelesteBot_2023
                     }
                 }
 
-                framesToCacheWipe = CelesteBotMain.ENTITY_CACHE_UPDATE_FRAMES;
+                //framesToCacheWipe = CelesteBotMain.ENTITY_CACHE_UPDATE_FRAMES;
             }
         }
         public static void ScaleCache()

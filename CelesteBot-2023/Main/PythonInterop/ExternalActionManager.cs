@@ -3,7 +3,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
-
+using System.Timers;
 namespace CelesteBot_2023
 {
     enum UpDownActionType
@@ -38,7 +38,7 @@ namespace CelesteBot_2023
         MenuDown = 2,
         Pause = 3,
     }
-    public class Action
+    public class InputAction
     {
         /*
          * RL Client returns actions as a list of ints corresponding to the enum values above.
@@ -49,8 +49,10 @@ namespace CelesteBot_2023
         readonly SpecialMoveActionType SpecialMoveAction;
         readonly GrabActionType grabAction;
         readonly MenuActionType MenuAction;
+        public bool IsWaitingAction { get; private set; }
 
-        public Action(int[] action)
+
+        public InputAction(int[] action)
         {
             UpDownAction = (UpDownActionType)action[0];
             LeftRightAction = (LeftRightActionType)action[1];
@@ -58,11 +60,13 @@ namespace CelesteBot_2023
             SpecialMoveAction = (SpecialMoveActionType)action[2];
             grabAction = (GrabActionType)action[3];
         }
-        public Action(MenuActionType menuAction)
+        public InputAction(MenuActionType menuAction)
         {
             MenuAction = menuAction;
         }
-        public Action() { 
+        public InputAction(bool isWaitingAction = false)
+        {
+            IsWaitingAction = isWaitingAction;
         }
         public override string ToString()
         {
@@ -156,28 +160,30 @@ namespace CelesteBot_2023
 
     public class ActionSequence
     {
-        readonly Queue<Action> sequence;
+        readonly Queue<InputAction> sequence;
         public ActionSequence() { }
-        public ActionSequence(Queue<Action> sequence)
+        public ActionSequence(Queue<InputAction> sequence)
         {
             this.sequence = sequence;
         }
+        private static Timer WaitTimer;
+        private static bool Waiting = false;
         public static ActionSequence GenerateActionSequence(string sequenceString)
         {
-            Queue<Action> sequence = new();
+            Queue<InputAction> sequence = new();
             string[] actions = sequenceString.Split(',');
             foreach (string action in actions)
             {
-                sequence.Enqueue(GenerateAction(action));
-                sequence.Enqueue(new Action());
-                sequence.Enqueue(new Action());
-                sequence.Enqueue(new Action());
-                sequence.Enqueue(new Action());
-                sequence.Enqueue(new Action());
-                sequence.Enqueue(new Action());
-                sequence.Enqueue(new Action());
-                sequence.Enqueue(new Action());
-                sequence.Enqueue(new Action());
+                InputAction next = GenerateAction(action);
+                sequence.Enqueue(next);
+                sequence.Enqueue(new InputAction());
+                sequence.Enqueue(new InputAction());
+                sequence.Enqueue(new InputAction());
+                sequence.Enqueue(new InputAction());
+                sequence.Enqueue(new InputAction());
+                sequence.Enqueue(new InputAction());
+                sequence.Enqueue(new InputAction());
+                sequence.Enqueue(new InputAction());
 
             }
             return new ActionSequence(sequence);
@@ -186,42 +192,66 @@ namespace CelesteBot_2023
         {
             return sequence != null && sequence.Count > 0;
         }
-        public Action GetNextAction()
+        public InputAction GetNextAction()
         {
-            return sequence.Dequeue();
+            if (Waiting)
+            {
+                return new InputAction();
+            }
+            InputAction nextAction = sequence.Dequeue();
+
+            if (nextAction.IsWaitingAction)
+            {
+                Waiting = true;
+                WaitTimer = new Timer(1000 / CelesteBotMain.FrameLoops)
+                {
+                    AutoReset = false,
+                    Enabled = true
+                };
+                WaitTimer.Elapsed += WaitTimer_Elapsed;
+            }
+
+            return nextAction;
         }
-        private static Action GenerateAction(string action)
+        private static void WaitTimer_Elapsed(object sender, ElapsedEventArgs e)
         {
+            CelesteBotMain.Log("Done Waiting");
+
+            Waiting = false;
+        }
+        private static InputAction GenerateAction(string action)
+        {
+            
             return action switch
             {
-                "Up" => new Action(new int[] { (int)UpDownActionType.Up, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.NOOP, (int)GrabActionType.NOOP }),
-                "Down" => new Action(new int[] { (int)UpDownActionType.Down, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.NOOP, (int)GrabActionType.NOOP }),
-                "Left" => new Action(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.Left, (int)SpecialMoveActionType.NOOP, (int)GrabActionType.NOOP }),
-                "Right" => new Action(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.Right, (int)SpecialMoveActionType.NOOP, (int)GrabActionType.NOOP }),
-                "Jump" => new Action(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.Jump, (int)GrabActionType.NOOP }),
-                "LongJump" => new Action(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.LongJump, (int)GrabActionType.NOOP }),
-                "Dash" => new Action(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.Dash, (int)GrabActionType.NOOP }),
-                "Grab" => new Action(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.NOOP, (int)GrabActionType.Grab }),
-                "MenuConfirm" or "MenuDown" or "Pause" => new Action((MenuActionType)Enum.Parse(typeof(MenuActionType), action)),
-                "Wait" => new Action(),
+                "Up" => new InputAction(new int[] { (int)UpDownActionType.Up, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.NOOP, (int)GrabActionType.NOOP }),
+                "Down" => new InputAction(new int[] { (int)UpDownActionType.Down, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.NOOP, (int)GrabActionType.NOOP }),
+                "Left" => new InputAction(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.Left, (int)SpecialMoveActionType.NOOP, (int)GrabActionType.NOOP }),
+                "Right" => new InputAction(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.Right, (int)SpecialMoveActionType.NOOP, (int)GrabActionType.NOOP }),
+                "Jump" => new InputAction(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.Jump, (int)GrabActionType.NOOP }),
+                "LongJump" => new InputAction(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.LongJump, (int)GrabActionType.NOOP }),
+                "Dash" => new InputAction(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.Dash, (int)GrabActionType.NOOP }),
+                "Grab" => new InputAction(new int[] { (int)UpDownActionType.NOOP, (int)LeftRightActionType.NOOP, (int)SpecialMoveActionType.NOOP, (int)GrabActionType.Grab }),
+                "MenuConfirm" or "MenuDown" or "Pause" => new InputAction((MenuActionType)Enum.Parse(typeof(MenuActionType), action)),
+                "Wait" => new InputAction(isWaitingAction: true),
                 _ => throw new InvalidEnumArgumentException("Invalid action: " + action),
             };
         }
     }
     public class ExternalActionManager
     {
-        readonly BlockingCollection<Action> ActionQueue;
+        readonly BlockingCollection<InputAction> ActionQueue;
         public static int NumRequestedActions { get; private set; }
         public static int NumAvailableActions { get; private set; }
 
         public ExternalActionManager()
         {
-            ActionQueue = new BlockingCollection<Action>();
+            ActionQueue = new BlockingCollection<InputAction>();
         }
 
         public void PythonAddAction(int[] action)
         {
-            ActionQueue.Add(new Action(action));
+            ActionQueue.Add(new InputAction(action));
             NumAvailableActions++;
         }
 
@@ -229,23 +259,23 @@ namespace CelesteBot_2023
         {
             if (ActionQueue.Count > 0 )
             {
-                CutsceneManager.Log("Flushing action queue!" + ActionQueue.Count , LogLevel.Warn);
+                CelesteBotMain.Log("Flushing action queue!" + ActionQueue.Count , LogLevel.Warn);
             }
-            while (ActionQueue.TryTake(out Action item)) { CutsceneManager.Log(item.ToString()); }
+            while (ActionQueue.TryTake(out InputAction item)) { CelesteBotMain.Log(item.ToString()); }
         }
-        public Action GetNextAction()
+        public InputAction GetNextAction()
         {
             if (NumRequestedActions >= ExternalGameStateManager.NumSentObservations)
             {
-                CutsceneManager.Log("Too many actions requested!", LogLevel.Error);   
+                CelesteBotMain.Log("Too many actions requested!", LogLevel.Error);   
             }
             double start = DateTime.Now.TimeOfDay.TotalMilliseconds;
             NumRequestedActions++;
             int timeout = CelesteBotMain.IsWorker ? 1000 * 30 : 1000 * 5;
-            bool success = ActionQueue.TryTake(out Action output, timeout);
+            bool success = ActionQueue.TryTake(out InputAction output, timeout);
             if (!success)
             {
-                CutsceneManager.Log("Action retrieval timed out!", LogLevel.Error);
+                CelesteBotMain.Log("Action retrieval timed out!", LogLevel.Error);
                 CelesteBotMain.BotState = CelesteBotMain.State.None;
                 CelesteBotMain.Instance.Unload();
                 throw new TimeoutException("Action retrieval timed out!");
@@ -254,7 +284,7 @@ namespace CelesteBot_2023
             double totalTime = end - start;
             double frameCalculationTime = 1000 / (CelesteBotMain.Settings.CalculationsPerSecond * CelesteBotMain.FrameLoops);
             if (totalTime > frameCalculationTime) {
-                CutsceneManager.Log("Action retrieval time too slow! " + totalTime.ToString() + "Frame calculation time: " + frameCalculationTime);
+                CelesteBotMain.Log("Action retrieval time too slow! " + totalTime.ToString() + "Frame calculation time: " + frameCalculationTime);
                 CelesteBotMain.ActionRetrievalStatus = "DELAYED: " + (totalTime - frameCalculationTime).ToString("F2") +"ms too slow";
             }
             else

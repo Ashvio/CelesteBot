@@ -1,18 +1,16 @@
 import argparse
-import distutils
 import math
 import os
 import platform
-import shutil
 import subprocess
 import time
-from selenium import webdriver
+
 from pywinauto import application
-import vgamepad as vg
 
 CELESTE_PATH = os.environ["CELESTE_PATH"]
 CELESTE_BASE_PATH = os.path.dirname(CELESTE_PATH)
 
+# customize for your monitor
 SCREEN_WIDTH = 2560
 SCREEN_HEIGHT = 1440
 
@@ -73,7 +71,7 @@ if __name__ == "__main__":
         processes.append(p)
         time.sleep(0.25)
     # Wait for processes to open windows
-    time.sleep(max(3 * args.num_workers, 12))
+    time.sleep(max(3 * args.num_workers, 30))
     x = 0
     y = 0
     print(f"Moving {args.num_workers} windows")
@@ -82,11 +80,16 @@ if __name__ == "__main__":
     width_to_height_ratio = 96 / 54
     num_rows = math.ceil(math.sqrt(args.num_workers))
     app_box_width = math.sqrt(size_per_app)
-    app_width = SCREEN_WIDTH // num_rows
-    app_height = SCREEN_HEIGHT // num_rows
+    if args.num_workers > 4:
+
+        app_width = SCREEN_WIDTH // num_rows
+        app_height = SCREEN_HEIGHT // num_rows
+    else:
+        app_width = 960
+        app_height = 540
     width_left = SCREEN_WIDTH
     apps = []
-    gamepad = vg.VX360Gamepad()
+    # gamepad = vg.VX360Gamepad()
     try:
         for i in range(num_rows):
             for j in range(num_rows):
@@ -96,7 +99,11 @@ if __name__ == "__main__":
                 app = application.Application()
                 app.connect(process=process.pid)
                 window = app.window()
-                window.move_window(x, y, app_width, app_height, repaint=False)
+                if args.num_workers > 4:
+                    window.move_window(x, y, app_width, app_height, repaint=False)
+                else:
+                    # dont increase window size
+                    window.move_window(x, y, repaint=False)
                 x += app_width
                 width_left -= x
                 apps.append(app)
@@ -107,39 +114,39 @@ if __name__ == "__main__":
         for process in processes:
             process.kill()
         raise
-
-    for app in apps:
-        window = app.window()
-
-        window.set_focus()
-        window.set_keyboard_focus()
-        time.sleep(2)
-
-        gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
-        gamepad.update()
-
-        time.sleep(0.1)
-        gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
-
-        # gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
-        time.sleep(1)
-        # move down to Randomizer
-        print('down')
-        gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN)
-        gamepad.update()
-        time.sleep(0.1)
-
-        gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN)
-        gamepad.update()
-        print('spam')
-        for i in range(15):
-            # Start the game
-            time.sleep(0.05)
-            gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
-            gamepad.update()
-            time.sleep(0.05)
-            gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
-            gamepad.update()
-            time.sleep(0.05)
-        gamepad.reset()
-        time.sleep(2)
+    # doing this in C# now
+    # for app in apps:
+    #     window = app.window()
+    #
+    #     window.set_focus()
+    #     window.set_keyboard_focus()
+    #     time.sleep(2)
+    #
+    #     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+    #     gamepad.update()
+    #
+    #     time.sleep(0.1)
+    #     gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+    #
+    #     # gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+    #     time.sleep(1)
+    #     # move down to Randomizer
+    #     print('down')
+    #     gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN)
+    #     gamepad.update()
+    #     time.sleep(0.1)
+    #
+    #     gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_DPAD_DOWN)
+    #     gamepad.update()
+    #     print('spam')
+    #     for i in range(15):
+    #         # Start the game
+    #         time.sleep(0.05)
+    #         gamepad.press_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+    #         gamepad.update()
+    #         time.sleep(0.05)
+    #         gamepad.release_button(vg.XUSB_BUTTON.XUSB_GAMEPAD_A)
+    #         gamepad.update()
+    #         time.sleep(0.05)
+    #     gamepad.reset()
+    #     time.sleep(2)

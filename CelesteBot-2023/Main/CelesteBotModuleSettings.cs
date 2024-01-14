@@ -20,7 +20,7 @@ namespace CelesteBot_2023
         [SettingRange(1, 10)]
         public int ActionCalculationFrames { get; set; } = 2;
 
-
+        // MUST be a factor of 60
         [SettingRange(1, 30), SettingNeedsRelaunch()]
         public int CalculationsPerSecond { get; set; } = 4;
 

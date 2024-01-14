@@ -34,7 +34,7 @@ internal static class ExtendedVariantsUtils
             }
             catch (Exception e)
             {
-                CutsceneManager.Log($"Parsing Variant.{value} Failed." + e.Message, LogLevel.Error);
+                CelesteBotMain.Log($"Parsing Variant.{value} Failed." + e.Message, LogLevel.Error);
                 return null;
             }
         };

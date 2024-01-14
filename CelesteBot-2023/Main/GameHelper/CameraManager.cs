@@ -10,11 +10,20 @@ namespace CelesteBot_2023
     {
         readonly CelesteBotRunner c_player;
 
-        public PyList CameraVision;
+        public PyList CameraVision { get; private set;}
+        public Vector2 PlayerTile { get; private set; }
+        public Vector2 TargetTile { get; private set; }
+
         public const int NUM_PIXELS_PER_TILE = 8;
         public const int TILES_SCREEN_WIDTH = 40;
         
         public Player player { get => c_player.CelesteGamePlayer; }
+
+        public void UpdateKeyTiles(Vector2 currentTarget)
+        {
+            PlayerTile = TileFinder.GetTileXY(new Vector2(player.X, player.Y - 4));
+            TargetTile = TileFinder.GetTileXY(currentTarget);
+        }
 
         public CameraManager(CelesteBotRunner player)
         {
@@ -45,7 +54,7 @@ namespace CelesteBot_2023
             //(you might also have to add / subtract level.Camera.Position to player.Position) 
             // 8 pixels per tile
             float xMax = CameraViewPortWidth;
-            float yMax = CameraViewPortHeight;
+            float yMax = CameraViewPortHeight + 4;
             //CelesteBotManager.Log(level.Camera.ToString());
             //Logger.Log(CelesteBotInteropModule.ModLogKey, "Tile Under Player: (" + tileUnder.X + ", " + tileUnder.Y + ")");
             //Logger.Log(CelesteBotInteropModule.ModLogKey, "(X,Y) Under Player: (" + player.X + ", " + (player.Y + 4) + ")");
@@ -54,11 +63,32 @@ namespace CelesteBot_2023
             //MTexture[,] tiles = TileFinder.GetSplicedTileArray(visionX, visionY);
             TileFinder.UpdateGrid();
             TileFinder.CacheEntities();
-            Vector2 playerTile = TileFinder.GetTileXY(new Vector2(player.X, player.Y - 4));
-            Vector2 targetTile = TileFinder.GetTileXY(currentTarget);
+            UpdateKeyTiles(currentTarget);
+            // Try to always show direction to target on the screen
+            Vector2 AdjustedTargetTile = TargetTile;
+            Vector2 minBound = TileFinder.GetTileXY(new Vector2(camera.X, camera.Y));
+            Vector2 maxBound = TileFinder.GetTileXY(new Vector2(camera.X + xMax, camera.Y + yMax));
+            if (TargetTile.X < minBound.X)
+            {
+                AdjustedTargetTile.X = minBound.X;
+            }
+            else if (TargetTile.X > maxBound.X)
+            {
+                AdjustedTargetTile.X = maxBound.X - 1;
+            }
+
+            if (TargetTile.Y < minBound.Y)
+            {
+                AdjustedTargetTile.Y = minBound.Y - 1;
+            }
+            else if (TargetTile.Y > maxBound.Y)
+            {
+                AdjustedTargetTile.Y = maxBound.Y;
+            }
+
             for (int i = 0; i < xMax; i += NUM_PIXELS_PER_TILE)
             {
-                for (int j = 0; j < yMax; j += NUM_PIXELS_PER_TILE)
+                for (int j = 0; j < yMax ; j += NUM_PIXELS_PER_TILE)
                 {
                     if (TileFinder.tileArray != null)
                     {
@@ -78,11 +108,11 @@ namespace CelesteBot_2023
                     }*/
                     Vector2 tile = TileFinder.GetTileXY(new Vector2(camera.X + i, camera.Y + j));
                     int obj;
-                    if (playerTile == tile)
+                    if (PlayerTile == tile)
                     {
                         obj = (int) Entity.Madeline;
                     }
-                    else if (targetTile == tile)
+                    else if (AdjustedTargetTile == tile)
                     {
                         obj = (int)Entity.Target;
                     }

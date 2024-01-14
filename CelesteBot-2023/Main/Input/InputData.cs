@@ -26,7 +26,7 @@ namespace CelesteBot_2023
         ///Refrenced from CelesteBotPlayer
         ///</summary>
         ///<param name="actions"actions array with length 6.</param>
-        public InputData(Action action)
+        public InputData(InputAction action)
         {
 
             UpdateData(action);
@@ -62,7 +62,7 @@ namespace CelesteBot_2023
         }
 
 
-        public void UpdateData(Action action)
+        public void UpdateData(InputAction action)
         {
             //when using a keyboard, Input.MoveX.Value is -1 when pressing left, 1 when pressing right, 0 otherwise. (same applies for Input.MoveY.Value)
             MoveX = action.GetMoveX();

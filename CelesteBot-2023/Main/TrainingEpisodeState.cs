@@ -32,16 +32,17 @@ namespace Celeste.Mod.CelesteBot_2023.Main
         public double LastDistanceFromTarget { get; private set; }
         public Vector2 LastVectorDistanceFromTarget;
         public bool IsClimbing { get; internal set; }
-        readonly int FramesBetweenCalculations;
+        private int FramesBetweenCalculations;
         public bool FirstObservationSent { get; internal set; }
         public Vector2 Target { get => TargetFinder.CurrentTarget; }
 
-
-
+        public int FinishedLevelCount { get; internal set; }
+        public string LastLevelName { get; private set; }
+        public string CurrentLevelName { get => TargetFinder.CelesteSession.Level; }
         private bool firstFrame;
         private double ClosestDistanceFromTargetReached;
         private Vector2 ClosestVectorDistanceFromTargetReached;
-        private int FramesSinceMadeProgress;
+        public int FramesSinceMadeProgress { get; private set; }
         public static double OriginalDistanceFromTarget;
         private Vector2 OriginalVectorDistanceFromTarget;
         private bool waitForReset = false;
@@ -54,7 +55,7 @@ namespace Celeste.Mod.CelesteBot_2023.Main
             positionFitnesses = Util.GetPositionFitnesses(FitnessPath);
             velocityFitnesses = Util.GetVelocityFitnesses(FitnessPath);
             FramesBetweenCalculations = 60 / CelesteBotMain.Settings.CalculationsPerSecond;
-
+            FinishedLevelCount = 0;
         }
 
         public void IncrementFrames()
@@ -64,6 +65,7 @@ namespace Celeste.Mod.CelesteBot_2023.Main
         public void ResetEpisode()
         {
             //Should only be called when player exists
+            CelesteBotMain.Log("Resetting episode, total reward: " + TotalReward, LogLevel.Info);
             FirstObservationSent = false;
             waitForReset = false;
             firstFrame = true;
@@ -72,24 +74,33 @@ namespace Celeste.Mod.CelesteBot_2023.Main
             NumFrames = 0;
             ReachedTarget = false;
             FramesSinceMadeProgress = 0;
+            FinishedLevelCount = TargetFinder.FinishedLevelCount;
+            LastLevelName = CurrentLevelName;
         }
 
+        public bool FinishedLevel
+        {
+            get
+            {
+                return TargetFinder.FinishedLevelCount > FinishedLevelCount && TargetFinder.FinishedLevelCount > 1 && TargetFinder.DoingBacktrackedLevels == false;
+            }
+        }
         public double GetReward()
         {
             if (waitForReset)
             {
-                CutsceneManager.Log("Waiting for reset, no reward given", LogLevel.Info);
+                CelesteBotMain.Log("Waiting for reset, no reward given", LogLevel.Info);
                 return 0;
             }
 
             if (player == null)
             {
-                CutsceneManager.Log("Player is null, no reward given", LogLevel.Info);
+                CelesteBotMain.Log("Player is null, no reward given", LogLevel.Info);
                 return 0;
             }
             if (firstFrame)
             {
-                CutsceneManager.Log("First action", LogLevel.Info);
+                CelesteBotMain.Log("First action", LogLevel.Info);
                 LastDistanceFromTarget = TargetFinder.CurrentDistanceFromTarget(player.CelesteGamePlayer);
                 LastVectorDistanceFromTarget = TargetFinder.CurrentVectorDistanceFromTarget(player.CelesteGamePlayer);
                 firstFrame = false;
@@ -102,7 +113,8 @@ namespace Celeste.Mod.CelesteBot_2023.Main
             Vector2 changeInVectorDistance = LastVectorDistanceFromTarget - currentVectorDistanceFromTarget;
             //reward going in the right direction in at least on axis
             double distanceChangeReward = Math.Max(-changeInVectorDistance.X, changeInVectorDistance.Y) + Math.Min(-changeInVectorDistance.X, changeInVectorDistance.Y);
-            double reward = Math.Max(distanceChangeReward, changeInDistance);
+            //double reward = Math.Max(distanceChangeReward, changeInDistance);
+            double reward = changeInDistance;
             double rewardMultipler = 1;
 
             if (distanceFromTarget < ClosestDistanceFromTargetReached)
@@ -128,16 +140,11 @@ namespace Celeste.Mod.CelesteBot_2023.Main
             //}
             LastDistanceFromTarget = distanceFromTarget;
             LastVectorDistanceFromTarget = currentVectorDistanceFromTarget;
-            if (NumFrames > 60 * 30 && reward < 0)
-            {
-                // time penalty
-                rewardMultipler *= 1.5;
-            }
-            if (FramesSinceMadeProgress > 60 * 15) // 15 seconds of no progress 
-            {
-                //CelesteBotManager.Log("Took too long to get to target, reducing reward", LogLevel.Warn);
-                reward -= (FramesSinceMadeProgress - 60 * 60) / (60 * 60);
-            }
+            //if (NumFrames > 60 * 30 && reward < 0)
+            //{
+            //    // time penalty
+            //    rewardMultipler *= 1.5;
+            //}
 
             if (player.CelesteGamePlayer.Dead)
             {
@@ -145,16 +152,44 @@ namespace Celeste.Mod.CelesteBot_2023.Main
                 //changeInVectorDistance = OriginalVectorDistanceFromTarget - currentVectorDistanceFromTarget * 3.5;
                 //double finalDistanceChangeReward = Math.Max(-changeInVectorDistance.X, changeInVectorDistance.Y) + Math.Min(-changeInVectorDistance.X, changeInVectorDistance.Y);
 
-                reward = (OriginalDistanceFromTarget - distanceFromTarget * 3.5) / OriginalDistanceFromTarget * 200;
+                reward = 5 * FramesBetweenCalculations * ((OriginalDistanceFromTarget - distanceFromTarget * 1.2) / OriginalDistanceFromTarget);
                 if (OriginalDistanceFromTarget == 0)
                 {
                     throw new DivideByZeroException("OriginalDistanceFromTarget is 0!");
                 }
-                CutsceneManager.Log("Died, reward: " + reward.ToString("F2")
+                CelesteBotMain.Log("Died, reward: " + reward.ToString("F2")
                                        + "Original distance from target: " + OriginalDistanceFromTarget.ToString("F2")
                                                           + " Closest distance from target: " + ClosestDistanceFromTargetReached.ToString("F2"), LogLevel.Info);
                 waitForReset = true;
             }
+
+            Func<bool, bool> setLevelFinished = (bool finished) =>
+            {
+                player.PlayerFinishedLevel = finished;
+                player.NeedImmediateGameStateUpdate = true;
+                LastLevelName = CurrentLevelName;
+                return true;
+            };
+
+            if (FinishedLevel)
+            {
+                // new level reached!
+                reward += 150 * FramesBetweenCalculations; // denormalized flat reward for beating level
+                setLevelFinished(true);
+            } else if (!TargetFinder.MovingForwardBacktrackedLevels && (CurrentLevelName != LastLevelName && CurrentLevelName != TargetFinder.CelesteSession.FurthestSeenLevel))
+            {
+                CelesteBotMain.Log("Backtracking, punishing", LogLevel.Info);
+                reward -= 75 * FramesBetweenCalculations; // denormalized flat punishment for backtracking levels
+                setLevelFinished(false);
+            } else if (CurrentLevelName != LastLevelName && TargetFinder.MovingForwardBacktrackedLevels)
+            {
+                CelesteBotMain.Log("Unbacktracking, rewarding", LogLevel.Info);
+
+                reward += 50 * FramesBetweenCalculations; // denormalized flat reward for un-backtracking
+                setLevelFinished(true);
+            }
+            // Punish if backtracking to level it shouldnt be on.
+
 
             //if (player.player.Dead && !FinishedLevel)
             //{
@@ -164,25 +199,31 @@ namespace Celeste.Mod.CelesteBot_2023.Main
             //        + "Original distance from target: " + OriginalDistanceFromTarget.ToString("F2") 
             //        + " Closest distance from target: " + ClosestDistanceFromTargetReached.ToString("F2"), LogLevel.Info);
             //}
-            else if (TotalReward <= -500)
+            //if (FramesSinceMadeProgress > 60 * 6) // 15 seconds of no progress 
+            //{
+            //    //CelesteBotManager.Log("Took too long to get to target, reducing reward", LogLevel.Warn);
+            //    reward -= (FramesSinceMadeProgress - 60 * 6) / (60);
+            //}
+
+            else if (FramesSinceMadeProgress > 60 * 10)
             {
-                CutsceneManager.Log("Killing player because its reward is too low");
+                CelesteBotMain.Log("Killing player because it timed out");
+                reward = -75 * FramesBetweenCalculations;
                 player.KillPlayer();
                 player.PlayerDied = true;
                 player.NeedImmediateGameStateUpdate = true;
-                ResetEpisode();
             }
             else
             {
                 reward *= rewardMultipler;
             }
-            if (TargetFinder.RedeemTargetReward())
-            {
-                reward += 1000;
-                ReachedTarget = false;
-                NewEpisodeSetOriginalDistance();
-                FramesSinceMadeProgress = 0;
-            }
+            //if (TargetFinder.RedeemTargetReward())
+            //{
+            //    reward += 1000;
+            //    ReachedTarget = false;
+            //    NewEpisodeSetOriginalDistance();
+            //    FramesSinceMadeProgress = 0;
+            //}
 
             // normalize reward on a per-frame basis
             reward /= FramesBetweenCalculations;
@@ -212,7 +253,7 @@ namespace Celeste.Mod.CelesteBot_2023.Main
             OriginalDistanceFromTarget = TargetFinder.CurrentDistanceFromTarget(player.CelesteGamePlayer);
             OriginalVectorDistanceFromTarget = TargetFinder.CurrentVectorDistanceFromTarget(player.CelesteGamePlayer);
 
-            CutsceneManager.Log("Resetting episode, new OriginalDistanceFromTarget: " + OriginalDistanceFromTarget.ToString("F2"));
+            CelesteBotMain.Log("Resetting episode, new OriginalDistanceFromTarget: " + OriginalDistanceFromTarget.ToString("F2"));
             ClosestDistanceFromTargetReached = OriginalDistanceFromTarget;
             ClosestVectorDistanceFromTargetReached = OriginalVectorDistanceFromTarget;
 

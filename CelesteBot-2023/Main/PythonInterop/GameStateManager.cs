@@ -19,12 +19,13 @@ namespace CelesteBot_2023
         public float CanDash { get; }
         public float[] ScreenPosition { get; internal set; }
 
-        public GameState(PyList vision, Player player, TrainingEpisodeState episode, bool playerDied, bool playerFinishedLevel)
+        public GameState(CameraManager cameraManager, Player player, TrainingEpisodeState episode, bool playerDied, bool playerFinishedLevel)
         {
             // Observation
-            Vision = vision;
+            Vision = cameraManager.CameraVision;
             Speed = new float[] { player.Speed.X, player.Speed.Y };
-            Position = new float[] { player.X, player.Y };
+            
+            Position = new float[] { cameraManager.PlayerTile.X, cameraManager.PlayerTile.Y };
             Stamina = Util.Normalize(player.Stamina, -1, 120);
             CanDash = player.CanDash ? 1 : 0;
             // Reward
@@ -41,9 +42,8 @@ namespace CelesteBot_2023
                 OnGround = false;
             }
                ScreenPosition = CameraManager.CameraPosition;
-            Target = new float[2] { episode.Target.X, episode.Target.Y };
+            Target = new float[2] { cameraManager.TargetTile.X, cameraManager.TargetTile.Y };
         }
-
     }
     public class ExternalGameStateManager
     {

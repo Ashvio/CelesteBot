@@ -47,7 +47,8 @@ namespace CelesteBot_2023
         {
             // Configure PythonNET interoperability using a python virtual env.
             // Store your Python DLL as an environment variable "PYTHONNET_PYDLL" before running.
-            CutsceneManager.Log("PYTHON Initializing");
+            CelesteBotMain.Log("PYTHON Initializing");
+            Setup();
             PythonEngine.Initialize();
             PythonEngine.BeginAllowThreads();
             
@@ -93,12 +94,12 @@ namespace CelesteBot_2023
             observationProducerThread.Start();
             trainingLoop.Start();
             rewardQueueProducer.Start();
-            CutsceneManager.Log("Python Finished Initializing");
+            CelesteBotMain.Log("Python Finished Initializing");
 
         }
         static void RunTrainingLoop(dynamic py_celeste_client)
         {
-            CutsceneManager.Log("Py Training Loop Initializing");
+            CelesteBotMain.Log("Py Training Loop Initializing");
 
 
             py_celeste_client.start_training();
@@ -108,7 +109,7 @@ namespace CelesteBot_2023
         static void ActionQueueConsumer(dynamic py_action_queue)
         {
             // Consumes Actions sent from Python client
-            CutsceneManager.Log("Py Action consumer Loop Initializing");
+            CelesteBotMain.Log("Py Action consumer Loop Initializing");
 
 
             // Loop through the Python queue and add each item to the BlockingCollection
@@ -125,7 +126,7 @@ namespace CelesteBot_2023
                 }
 
                 // Convert it to a C# Item object
-                CelesteBotMain.AIPlayer.ActionManager.PythonAddAction(actions);
+                CelesteBotRunner.ActionManager.PythonAddAction(actions);
 
             }
 
@@ -133,11 +134,11 @@ namespace CelesteBot_2023
         static void RewardQueueProducer(dynamic python_celeste_client)
         {
             // Sends Rewards to Python client
-            CutsceneManager.Log("Py Reward Producer Loop Initializing");
+            CelesteBotMain.Log("Py Reward Producer Loop Initializing");
 
             while(true)
             {
-                double reward = CelesteBotMain.AIPlayer.GameStateManager.PythonGetNextReward();
+                double reward = CelesteBotRunner.GameStateManager.PythonGetNextReward();
 
                 using (Py.GIL())
                 {
@@ -148,7 +149,7 @@ namespace CelesteBot_2023
         static void ObservationQueueProducer(dynamic python_celeste_client)
         {
             // Sends Observations of Game State to Python client
-            CutsceneManager.Log("Py Observation Producer Loop Initializing");
+            CelesteBotMain.Log("Py Observation Producer Loop Initializing");
 
 
             // Loop through the Python queue and add each item to the BlockingCollection
@@ -156,7 +157,7 @@ namespace CelesteBot_2023
             {
                 //CelesteBotManager.Log("Attempting Observation queue get");
                 // Convert it to a C# Item object
-                GameState obs = CelesteBotMain.AIPlayer.GameStateManager.PythonGetNextObservation();
+                GameState obs = CelesteBotRunner.GameStateManager.PythonGetNextObservation();
                 using (Py.GIL())
                 {
                     PyObject stamina = obs.Stamina.ToPython();
@@ -171,7 +172,7 @@ namespace CelesteBot_2023
                     PyObject finishedLevel = obs.FinishedLevel.ToPython();
                     PyObject isClimbing = obs.IsClimbing.ToPython();
                     PyObject onGround = obs.OnGround.ToPython();
-
+                    //def ext_add_observation(self, vision, speed_x_y, can_dash, stamina, death_flag, finished_level, target, position, screen_position, is_climbing, on_ground):
                     python_celeste_client.ext_add_observation(obs.Vision, speed, canDash, stamina, deathFlag, finishedLevel, target, position, screenPosition, isClimbing, onGround);
 
                 }

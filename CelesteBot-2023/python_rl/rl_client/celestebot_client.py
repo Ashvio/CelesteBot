@@ -135,11 +135,12 @@ class CelesteClient:
             # base Celeste game
             self.is_worker = False
             worker_number = 0
-        num_client_workers = int(os.environ.get("NUM_CLIENT_WORKERS", 9))
+        num_client_workers = int(os.environ.get("NUM_CLIENT_WORKERS", 4))
         self.num_server_workers = celestebot_server.NUM_WORKERS
         num_clients_per_server = max(num_client_workers // self.num_server_workers, 1)
         # num_clients_per_server = 1
-        server_number = worker_number // num_clients_per_server
+        # server_number = num_clients_per_server % worker_number
+        server_number = worker_number
         self.logger.log(logging.INFO, f"Worker number: {worker_number}")
         self.logger.log(logging.INFO, f"Num client workers: {num_client_workers}")
         self.logger.log(logging.INFO, f"Num server workers: {self.num_server_workers}")
@@ -252,6 +253,7 @@ class CelesteClient:
                     self.logger.log(logging.INFO, "Started episode, observation: " + str(obs))
                     start_time = time.time()
                     action_count = 0
+                    total_count = 0
                     reward_logger = threading.Thread(target=self.log_rewards)
                     reward_logger.start()
                     while True:
@@ -261,6 +263,7 @@ class CelesteClient:
                         # No need to log it here as the action
                         # self.logger.log(logging.DEBUG, "Querying action: " + str(episode_id))
                         action_count += 1
+                        total_count += 1
                         try:
                             action = self.client.get_action(self.current_episode_id, obs)
                         except HTTPError as e:
@@ -273,9 +276,12 @@ class CelesteClient:
 
                         obs, reward, terminated, truncated, info = self.env.step(action)
                         self.awaiting_rewards += 1
-                        if action_count % 1 == 0:
+                        if total_count % 20 == 0:
                             self.logger.log(logging.DEBUG, f"Reward for Action {action}: {reward}")
-                            # self.logger.log(logging.DEBUG, f"Observation: {obs}")
+                            self.logger.log(logging.DEBUG, f"Observation: {obs}")
+
+                        if self.env.observation_queue.qsize() > 5:
+                            self.logger.log(logging.WARN, f"Observation queue size: {self.env.observation_queue.qsize()}")
 
                         self.client.log_returns(self.current_episode_id, np.float64(reward))
                         self.episode_rewards += reward

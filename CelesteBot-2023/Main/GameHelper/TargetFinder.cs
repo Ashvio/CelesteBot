@@ -8,6 +8,8 @@ using System.IO;
 using Celeste.Mod;
 using CelesteBot_2023.SimplifiedGraphics;
 using static CelesteBot_2023.CelesteBotMain;
+using Celeste.Mod.Randomizer;
+using System.Runtime.CompilerServices;
 
 namespace CelesteBot_2023
 {
@@ -21,15 +23,34 @@ namespace CelesteBot_2023
         private static Dictionary<Tuple<string, string>, Vector2> targetSpawnPoints;
         private static Tuple<string, string> currentTargetLevel;
         private static Vector2 currentTarget;
+
+        public static Level lastLevel { get; private set; }
+
         private static string targetedLevel = "";
         private static HashSet<string> seenLevels;
         private static Stack<string> backTrackedLevels;
+        private static Dictionary<string, Vector2> LightBeamCache = new();
+
+        public static int FinishedLevelCount { get { return LightBeamCache.Count; } }
+
         public static string CurrentMap { get; private set; }
         public static string FurthestSeenLevel { get; private set; }
         public static bool TargetReachedRewardWaiting { get; private set; }
-        private static Session session { get => SceneExtensions.GetSession(Engine.Scene); }
-        private static Player player { get => SceneExtensions.GetPlayer(Engine.Scene); }
-        
+        public static Session CelesteSession { get => SceneExtensions.GetSession(Engine.Scene); }
+        private static Player CelestePlayer { get => SceneExtensions.GetPlayer(Engine.Scene); }
+
+        public static bool DoingBacktrackedLevels { get; private set; }
+        public static bool MovingForwardBacktrackedLevels { get; private set; }
+
+        private static Level CurrentLevel { get => SceneExtensions.GetLevel(Engine.Scene); }
+        public static bool InRandomizerMap { get {
+                return (bool)(RandoModule.Instance?.InRandomizer);
+            } 
+        }
+        public static void ResetCache()
+        {
+            LightBeamCache = new();
+        }   
         [Initialize]
         public static void Initialize()
         {
@@ -90,7 +111,7 @@ namespace CelesteBot_2023
                         spawnPoint = levelData.Spawns.ClosestTo(new Vector2(levelData.Bounds.Left, levelData.Bounds.Bottom));
                         //CelesteBotManager.Log("No default spawn point found for level " + levelName + ", using " + spawnPoint.ToString() + " instead.");
                     }
-                    CutsceneManager.Log("Found level spawn point: " + spawnPoint.ToString() + "for level " + levelName);
+                    Log("Found level spawn point: " + spawnPoint.ToString() + "for level " + levelName);
                     targetSpawnPoints.Add(levelKey, (Vector2)spawnPoint);
                     //Vector2 bounds = new Vector2(levelData.Bounds.Left, levelData.Bounds.Bottom)
                     //levelData.Spawns.ClosestTo(bounds)
@@ -106,25 +127,26 @@ namespace CelesteBot_2023
             }
             return Tuple.Create(currentLevel.Session.MapData.Filename, currentLevel.Session.Level);
         }
-        //public static Vector2 GetEstimatedTarget(Player player)
-        //{
-        //    // find gaps on the walls opposing the player and return the furthest one
-        //    Level currentLevel = SceneExtensions.GetLevel(Engine.Scene);
-        //    Rectangle bounds = currentLevel.Bounds;
-        //    currentTarget = GetOppositeSideOfBounds(player, bounds);
-        //    lastLevel = currentLevel;
-        //    return currentTarget;
-        //}
+        public static Vector2 GetEstimatedTarget(Player player)
+        {
+            // find gaps on the walls opposing the player and return the furthest one
+            Level currentLevel = SceneExtensions.GetLevel(Engine.Scene);
+            Rectangle bounds = currentLevel.Bounds;
+            currentTarget = GetOppositeSideOfBounds(player, bounds);
+            lastLevel = currentLevel;
+            return currentTarget;
+        }
 
         private static Vector2 GetClosestLightBeamTarget()
         {
+            
             List<Vector2> lightBeams = GetLightBeamTargets();
             //find closest lightbeam from player
             Vector2 closestLightBeam = Vector2.Zero;
             double closestDistance = double.MaxValue;
             foreach (Vector2 lightBeam in lightBeams)
             {
-                double distance = Vector2.Distance(player.Position, lightBeam);
+                double distance = Vector2.Distance(CelestePlayer.Position, lightBeam);
                 if (distance < closestDistance)
                 {
                     closestDistance = distance;
@@ -134,21 +156,27 @@ namespace CelesteBot_2023
             return closestLightBeam;
 
         }
+
         public static Vector2 GetFurthestLightBeamTarget()
         {
+            if (LightBeamCache.ContainsKey(CelesteSession.Level))
+            {
+                return LightBeamCache[CelesteSession.Level];
+            }
             List<Vector2> lightBeams = GetLightBeamTargets();
             //find urthest lightbeam from player
             Vector2 furthestLightBeam = Vector2.Zero;
             double furthestDistance = 0;
             foreach (Vector2 lightBeam in lightBeams)
             {
-                double distance = Vector2.Distance(player.Position, lightBeam);
+                double distance = Vector2.Distance(CelestePlayer.Position, lightBeam);
                 if (distance > furthestDistance)
                 {
                     furthestDistance = distance;
                     furthestLightBeam = lightBeam;
                 }
             }
+            LightBeamCache[CelesteSession.Level] = furthestLightBeam;
             return furthestLightBeam;
         }
         public static Vector2 LevelToWorldCoord(Vector2 levelCoord, Level level)
@@ -158,7 +186,7 @@ namespace CelesteBot_2023
         public static List<Vector2> GetLightBeamTargets()
         {
             // Randomizer mod adds lightbeams to each potential level exit, so we can use those as targets
-            LevelData currentLevelData = session?.MapData?.Get(session?.Level);
+            LevelData currentLevelData = CelesteSession?.MapData?.Get(CelesteSession?.Level);
             if (currentLevelData == null)
             {
                 return new();
@@ -201,11 +229,11 @@ namespace CelesteBot_2023
             return oppositeSide;
         }
 
-        public static Vector2 GetNextTarget(Level currentLevel)
+        public static Vector2 GetNextTarget()
         {
             // todo: find all levels bordering the current level, and return their coordinates as a list of potential targets
             // base target will be the end of the last level of the map
-            if (currentLevel == null)
+            if (CurrentLevel == null)
             {
                 return Vector2.Zero;
             }
@@ -216,12 +244,12 @@ namespace CelesteBot_2023
                 FurthestSeenLevel = currentSession.FurthestSeenLevel;
             }
 
-            if (targetSpawnPoints == null || currentLevel.Session.MapData.Filename != CurrentMap)
+            if (targetSpawnPoints == null || CurrentLevel.Session.MapData.Filename != CurrentMap)
             {
-                LoadLevelsForCurrentMap(currentLevel);
+                LoadLevelsForCurrentMap(CurrentLevel);
             }
 
-            Tuple<string, string> levelKey = GetLevelKey(currentLevel);
+            Tuple<string, string> levelKey = GetLevelKey(CurrentLevel);
             if (currentTargetLevel != null && levelKey == currentTargetLevel)
             {
                 return currentTarget;
@@ -232,8 +260,8 @@ namespace CelesteBot_2023
             if (nextLevelKey.Item1 != CurrentMap)
             {
                 // this is the end of the chapter, so how do we get target? Estimate by getting bounds of level and comparing to respawn target. Choose next target by getting the opposite side of the level.
-                CutsceneManager.Log("Next level is not in the same map, so we are at the end of the chapter. Getting bounds of level and setting top right as target.", LogLevel.Info);
-                LevelData levelData = currentLevel.Session.MapData.Get(levelKey.Item2);
+                Log("Next level is not in the same map, so we are at the end of the chapter. Getting bounds of level and setting top right as target.", LogLevel.Info);
+                LevelData levelData = CurrentLevel.Session.MapData.Get(levelKey.Item2);
 
                 nextTarget = new Vector2(levelData.Bounds.Right, levelData.Bounds.Top);
             }
@@ -243,12 +271,12 @@ namespace CelesteBot_2023
 
                 if (nextTarget == currentTarget)
                 {
-                    CutsceneManager.Log("Next target is the same as current target!", LogLevel.Warn);
+                    Log("Next target is the same as current target!", LogLevel.Warn);
                     throw new InvalidOperationException("Next target is the same as current target: " + nextTarget.ToString());
                     //nextTarget = targetSpawnPoints[levelKeysInCompletionOrder[indexOfCurrentLevel + 2]];
                 }
             }
-            CutsceneManager.Log("Setting target to " + nextTarget.ToString() + " for level " + levelKey);
+            Log("Setting target to " + nextTarget.ToString() + " for level " + levelKey);
             currentTarget = nextTarget;
             currentTargetLevel = levelKey;
             return nextTarget;
@@ -269,21 +297,35 @@ namespace CelesteBot_2023
             }
             return player.Position - currentTarget;
         }
-        public static Vector2 UpdateCurrentTarget()
+        public static void UpdateCurrentTarget()
         {
-            string currentLevel = session.Level;
+            string currentLevel = CelesteSession.Level;
             bool isFirstLevel = currentTarget == Vector2.Zero;
             bool levelIsDifferent = currentLevel != targetedLevel;
             bool seenLevelBefore = seenLevels.Contains(currentLevel);
             string oldTargetedLevel = targetedLevel;
-            bool backtracking = false;
+            bool movingForwardBacktracking = false;
+            Func<Vector2> closeTargetRetrievalMethod;
+            Func<Vector2> farTargetRetrievalMethod;
+
+            if (InRandomizerMap)
+            {
+                closeTargetRetrievalMethod = GetFurthestLightBeamTarget;
+                farTargetRetrievalMethod = GetFurthestLightBeamTarget;
+            } else
+            {
+                closeTargetRetrievalMethod = GetNextTarget;
+                farTargetRetrievalMethod = GetNextTarget;
+            }
+
+            bool doingBacktrackedLevels = false;
             if (levelIsDifferent)
             {
-                bool doingBacktrackedLevels = backTrackedLevels.Count > 0 && backTrackedLevels.Peek() == currentLevel;
+                doingBacktrackedLevels = backTrackedLevels.Count > 0 && backTrackedLevels.Peek() == currentLevel;
                 if (seenLevelBefore && doingBacktrackedLevels)
                 {
                     backTrackedLevels.Pop();
-                    backtracking = true;
+                    movingForwardBacktracking = true;
                 }
                 else if (seenLevelBefore && !doingBacktrackedLevels)
                 {
@@ -294,23 +336,24 @@ namespace CelesteBot_2023
             }
             bool isFurthestLevel = backTrackedLevels.Count == 0;
 
-            if (levelIsDifferent && !isFurthestLevel && !backtracking)
+            if (levelIsDifferent && !isFurthestLevel && !movingForwardBacktracking)
             {
                 // need to backtrack! l1=>l2=>l1
-                CutsceneManager.Log("Need to backtrack: " + oldTargetedLevel + " " + currentLevel, LogLevel.Info);
-                currentTarget = GetClosestLightBeamTarget();
+                Log("Need to backtrack: " + oldTargetedLevel + " " + currentLevel, LogLevel.Info);
+
+                currentTarget = closeTargetRetrievalMethod();
             }
 
-            else if (isFirstLevel || backtracking || (levelIsDifferent && isFurthestLevel))
+            else if (isFirstLevel || movingForwardBacktracking || (levelIsDifferent && isFurthestLevel))
             {
                 // need to go forward!
-                CutsceneManager.Log("Need to go forward: " + oldTargetedLevel + " " + currentLevel, LogLevel.Info);
+                Log("Need to go forward: " + oldTargetedLevel + " " + currentLevel, LogLevel.Info);
                 if (targetedLevel != "" && !seenLevelBefore)
                 {
                     TargetReachedRewardWaiting = true;
                 }
                 seenLevels.Add(currentLevel);
-                currentTarget = GetFurthestLightBeamTarget();
+                currentTarget = farTargetRetrievalMethod();
             }
             //if (currentTarget == Vector2.Zero)
             //{
@@ -319,7 +362,8 @@ namespace CelesteBot_2023
             //    //currentTarget = GetEstimatedTarget(player);
             //    //currentTarget = GetNextTarget(currentLevel);
             //}
-            return currentTarget;
+            DoingBacktrackedLevels = doingBacktrackedLevels;
+            MovingForwardBacktrackedLevels = movingForwardBacktracking;
         }
 
         public static bool RedeemTargetReward()
@@ -327,7 +371,7 @@ namespace CelesteBot_2023
             //cashes out a reward waiting for the agent
             if (TargetReachedRewardWaiting)
             {
-                CutsceneManager.Log("Redeeming target reward", LogLevel.Info);
+                Log("Redeeming target reward", LogLevel.Info);
                 TargetReachedRewardWaiting = false;
                 return true;
             }

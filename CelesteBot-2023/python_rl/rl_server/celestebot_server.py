@@ -152,7 +152,7 @@ def get_cli_args():
     return args
 
 
-NUM_WORKERS = 2
+NUM_WORKERS = 4
 
 if __name__ == "__main__":
     args = get_cli_args()
@@ -249,7 +249,7 @@ if __name__ == "__main__":
         .offline_data(input_=_input, offline_sampling=False, shuffle_buffer_size=0)
         # Use n worker processes to listen on different ports.
         .rollouts(
-            num_rollout_workers=1,
+            num_rollout_workers=4,
             # Connectors are not compatible with the external env.
             enable_connectors=False,
             # create_env_on_local_worker=True,
@@ -289,7 +289,7 @@ if __name__ == "__main__":
         {
             # "enable_connectors": False,
             # "num_cpus": 22,
-            "num_workers": 1,
+            "num_workers": 4,
             "model": {
                 "use_lstm": False,
                 "use_attention": True,
@@ -311,14 +311,17 @@ if __name__ == "__main__":
             "num_sgd_iter": 10,
             "sgd_minibatch_size": 64,
             # "entropy_coeff": sample_from(lambda spec: tune.loguniform(*hyper_parameter_ranges["entropy_coeff"])),
-            "gamma": sample_from(lambda spec: random.uniform(*hyper_parameter_ranges["gamma"])),
+            # "gamma": sample_from(lambda spec: random.uniform(*hyper_parameter_ranges["gamma"])),
+            "gamma": 0.99,
             # "lambda": sample_from(lambda spec: random.uniform(0.9, 1.0)),
-            "lambda": sample_from(lambda spec: random.uniform(*hyper_parameter_ranges["lambda"])),
-            "clip_param": sample_from(lambda spec: random.uniform(*hyper_parameter_ranges["clip_param"])),
+            # "lambda": sample_from(lambda spec: random.uniform(*hyper_parameter_ranges["lambda"])),
+            "lambda": 0.995,
+            # "clip_param": sample_from(lambda spec: random.uniform(*hyper_parameter_ranges["clip_param"])),
+            "clip_param": 0.15,
             # "lr": sample_from(lambda spec: tune.loguniform(*hyper_parameter_ranges["lr"])),
             "train_batch_size": 512,
             # "train_batch_size": sample_from(lambda spec: tune.randint(*hyper_parameter_ranges["train_batch_size"])),
-            # "lr_schedule": [[0, 1e-3], [100000, 1e-4], [10000000, 1e-5]],
+            "lr_schedule": [[0, 1e-3], [100000, 1e-4], [10000000, 1e-5]],
             # "normalize_actions": False
         }
     )
@@ -427,11 +430,11 @@ if __name__ == "__main__":
         logging.getLogger('urllib3.connectionpool').setLevel(logging.WARN)
         logging.getLogger('urllib3').setLevel(logging.WARN)
         NUM_TRAINER_WORKERS = 3
-        NUM_SAMPLES = 3
-        tune_config = tune.TuneConfig(scheduler=pb2, num_samples=NUM_SAMPLES, reuse_actors=False, )
+        NUM_SAMPLES = 1
+        tune_config = tune.TuneConfig(num_samples=NUM_SAMPLES, reuse_actors=False, )
 
         ppo = _get_trainable("PPO")
-        resources = tune.PlacementGroupFactory([{"CPU": 2, "GPU": 0.33}, {"CPU": 4, }], strategy="SPREAD")
+        resources = tune.PlacementGroupFactory([{"CPU": 6 / NUM_SAMPLES, "GPU": 1 / NUM_SAMPLES}, {"CPU": 4 / NUM_SAMPLES, }, {"CPU": 4 / NUM_SAMPLES, }, {"CPU": 4 / NUM_SAMPLES, }, {"CPU": 4 / NUM_SAMPLES, }], strategy="SPREAD")
         trainable = tune.with_resources(ppo, resources)
 
         # ScalingConfig(

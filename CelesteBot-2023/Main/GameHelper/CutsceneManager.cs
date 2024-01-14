@@ -21,12 +21,6 @@ namespace CelesteBot_2023
     public class CutsceneManager
     { 
         public static bool Cutscene = false;
-       
-
-        public static void Log(string message, LogLevel level = LogLevel.Verbose)
-        {
-            Log(message);
-        }
 
         public static bool CompleteCutsceneSkip(InputPlayer inputPlayer)
         {
@@ -47,7 +41,7 @@ namespace CelesteBot_2023
                 // Just make sure we are playing again!
                 return false;
             }
-            Log("Completing Cutscene Skip with inputs: " + thisFrame + " and Cutscene: " + Cutscene);
+            CelesteBotMain.Log("Completing Cutscene Skip with inputs: " + thisFrame + " and Cutscene: " + Cutscene);
             inputPlayer.UpdateData(thisFrame);
             return true;
         }
@@ -60,8 +54,8 @@ namespace CelesteBot_2023
                 if (Cutscene)
                 {
                     Cutscene = CompleteCutsceneSkip(inputPlayer);
-                    Log("Confirmed a cutscene skip!");
-                    Log("After Cutscene skip: " + Cutscene);
+                    CelesteBotMain.Log("Confirmed a cutscene skip!");
+                    CelesteBotMain.Log("After Cutscene skip: " + Cutscene);
                     return true; // even if it returned false last time, still skip
                 }
                 try
@@ -70,9 +64,9 @@ namespace CelesteBot_2023
 
                     if (level.InCutscene)
                     {
-                        Log("Confirmed a cutscene skip!");
+                        CelesteBotMain.Log("Confirmed a cutscene skip!");
 
-                        Log("Entered Cutscene! With Cutscene: " + Cutscene);
+                        CelesteBotMain.Log("Entered Cutscene! With Cutscene: " + Cutscene);
                         Cutscene = true;
                         InputData newFrame = new()
                         {
@@ -102,7 +96,7 @@ namespace CelesteBot_2023
                     MenuConfirm = true
                 };
                 inputPlayer.UpdateData(temp);
-                Log("Restarting!");
+                CelesteBotMain.Log("Restarting!");
                 return true;
             }
             return false;
