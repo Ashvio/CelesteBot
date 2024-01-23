@@ -209,18 +209,18 @@ class CelesteClient:
         action = self.client.get_action(self.current_episode_id, nest_obs)
         return [int(x) for x in action.tolist()]
 
-    def log_rewards(self):
-        while True:
-            try:
-                reward = self.env.reward_queue.get(timeout=0.5)
-            except queue.Empty:
-                self.logger.log(logging.INFO, "Timed out waiting for reward")
-                self.logger.log(logging.INFO, "queue size: " + str(self.env.reward_queue.qsize()))
-                reward = 0.0
-            info = self.info_queue.get()
-            self.client.log_returns(self.current_episode_id, reward, info=info)
-            self.episode_rewards += reward
-            self.info_queue.task_done()
+    # def log_rewards(self):
+    #     while True:
+    #         try:
+    #             reward = self.env.reward_queue.get(timeout=0.5)
+    #         except queue.Empty:
+    #             self.logger.log(logging.WARN, "Timed out waiting for reward")
+    #             self.logger.log(logging.WARN, "queue size: " + str(self.env.reward_queue.qsize()))
+    #             reward = 0.0
+    #         info = self.info_queue.get()
+    #         self.client.log_returns(self.current_episode_id, reward, info=info)
+    #         self.episode_rewards += reward
+    #         self.info_queue.task_done()
 
     def _initiate_server_connection(self, session):
         # Start a new episode.
@@ -237,6 +237,7 @@ class CelesteClient:
                 self.logger.log(logging.ERROR, f"Error connecting to server: {e}")
                 # workers restarted, move ports up
                 self.port += self.num_server_workers
+
     def start_training(self):
         # In the following, we will use our external environment (the CartPole
         # env we created above) in connection with the PolicyClient to query
@@ -248,14 +249,16 @@ class CelesteClient:
                 try:
                     obs, info = self.env.reset()
 
-
                     self._initiate_server_connection(session)
                     self.logger.log(logging.INFO, "Started episode, observation: " + str(obs))
                     start_time = time.time()
                     action_count = 0
                     total_count = 0
-                    reward_logger = threading.Thread(target=self.log_rewards)
-                    reward_logger.start()
+                    num_episodes = 0
+                    deaths = 0
+                    finished_levels = 0
+                    # reward_logger = threading.Thread(target=self.log_rewards)
+                    # reward_logger.start()
                     while True:
                         # Compute an action randomly (off-policy) and log it.
 
@@ -276,13 +279,15 @@ class CelesteClient:
 
                         obs, reward, terminated, truncated, info = self.env.step(action)
                         self.awaiting_rewards += 1
-                        if total_count % 20 == 0:
-                            self.logger.log(logging.DEBUG, f"Reward for Action {action}: {reward}")
-                            self.logger.log(logging.DEBUG, f"Observation: {obs}")
+                        # if total_count % 20 == 0:
+                        #     self.logger.log(logging.DEBUG, f"Reward for Action {action}: {reward}")
+                        #     self.logger.log(logging.DEBUG, f"Observation: {obs}")
 
-                        if self.env.observation_queue.qsize() > 5:
-                            self.logger.log(logging.WARN, f"Observation queue size: {self.env.observation_queue.qsize()}")
-
+                        if self.env.observation_queue.qsize() > 2:
+                            self.logger.log(logging.WARN,
+                                            f"Observation queue size: {self.env.observation_queue.qsize()}")
+                        if self.env.reward_queue.qsize() > 1:
+                            self.logger.log(logging.WARN, f"Reward queue size: {self.env.reward_queue.qsize()}")
                         self.client.log_returns(self.current_episode_id, np.float64(reward))
                         self.episode_rewards += reward
 
@@ -294,8 +299,13 @@ class CelesteClient:
                         # Reset the episode if done.
                         if terminated or truncated:
                             # wait for all rewards to have been sent
+                            num_episodes += 1
+                            if info["Died"]:
+                                deaths += 1
+                            if info["Finished Level"]:
+                                finished_levels += 1
                             self.logger.log(logging.INFO,
-                                            f"Total reward for episode: {self.episode_rewards}. Episode ended due to: {info}")
+                                            f"Total reward for episode {num_episodes}: {self.episode_rewards}. {deaths} deaths, {finished_levels} finished levels")
                             end_time = time.time()
                             self.logger.log(logging.INFO,
                                             f"Episode took {end_time - start_time} seconds and  {action_count / (end_time - start_time)} actions per second")

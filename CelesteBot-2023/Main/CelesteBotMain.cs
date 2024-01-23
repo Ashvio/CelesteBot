@@ -76,6 +76,7 @@ namespace CelesteBot_2023
             On.Monocle.MInput.Update += MInput_Update;
             On.Celeste.Celeste.OnSceneTransition += OnScene_Transition;
             On.Celeste.Player.ClimbCheck += Player_ClimbCheck;
+
             Logger.Log(ModLogKey, "Load successful");
         }
 
@@ -128,7 +129,7 @@ namespace CelesteBot_2023
             On.Monocle.MInput.Update -= MInput_Update;
             On.Celeste.Celeste.OnSceneTransition -= OnScene_Transition;
             On.Celeste.Player.ClimbCheck -= Player_ClimbCheck;
-            On.Celeste.Level.TransitionTo += Level_TransitionTo;
+            On.Celeste.Level.TransitionTo -= Level_TransitionTo;
 
             Logger.Log(ModLogKey, "Unload successful");
         }
@@ -139,6 +140,8 @@ namespace CelesteBot_2023
             BotRunner.Episode.IsClimbing = result;
             return result;
         }
+
+
 
         public static void Engine_Draw(On.Monocle.Engine.orig_Draw original, Engine self, GameTime time)
         {
@@ -177,8 +180,11 @@ namespace CelesteBot_2023
                 original();
                 return;
             }
+            Level level = TileFinder.GetCelesteLevel();
 
-            BotRunner.TryUpdateGameState(nextInput);
+            if (level != null && !level.Paused) {
+                BotRunner.TryUpdateGameState(nextInput);
+            }
             original();
         }
         static bool HandleKB()

@@ -53,8 +53,8 @@ namespace CelesteBot_2023
 
         public ExternalGameStateManager()
         {
-            GameStateQueue = new BlockingCollection<GameState>();
-            RewardQueue = new BlockingCollection<double>();
+            GameStateQueue = new BlockingCollection<GameState>(40);
+            RewardQueue = new BlockingCollection<double>(40);
         }
 
         public void AddObservation(GameState obs)

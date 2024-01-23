@@ -14,7 +14,7 @@ namespace Celeste.Mod.CelesteBot_2023.Main
         {
             get
             {
-                return player.CelesteGamePlayer?.Dead ?? false;
+                return runner.CelesteGamePlayer?.Dead ?? false;
             }
         }
         public bool ReachedTarget { get; set; }
@@ -23,7 +23,7 @@ namespace Celeste.Mod.CelesteBot_2023.Main
 
         public double TotalReward { get; private set; }
 
-        readonly CelesteBotRunner player;
+        readonly CelesteBotRunner runner;
         readonly string FitnessPath = @"fitnesses.fit";
         // Target Fitness and stuff
         public Dictionary<string, List<Vector2>> positionFitnesses;
@@ -50,7 +50,7 @@ namespace Celeste.Mod.CelesteBot_2023.Main
         {
             FirstObservationSent = false;
             NumFrames = 0;
-            this.player = player;
+            this.runner = player;
             firstFrame = true;
             positionFitnesses = Util.GetPositionFitnesses(FitnessPath);
             velocityFitnesses = Util.GetVelocityFitnesses(FitnessPath);
@@ -82,7 +82,7 @@ namespace Celeste.Mod.CelesteBot_2023.Main
         {
             get
             {
-                return TargetFinder.FinishedLevelCount > FinishedLevelCount && TargetFinder.FinishedLevelCount > 1 && TargetFinder.DoingBacktrackedLevels == false;
+                return TargetFinder.FinishedLevelCount > FinishedLevelCount && TargetFinder.FinishedLevelCount > 1 && TargetFinder.DoingBacktrackedLevels == false && ClosestDistanceFromTargetReached < 50;
             }
         }
         public double GetReward()
@@ -93,7 +93,7 @@ namespace Celeste.Mod.CelesteBot_2023.Main
                 return 0;
             }
 
-            if (player == null)
+            if (runner == null)
             {
                 CelesteBotMain.Log("Player is null, no reward given", LogLevel.Info);
                 return 0;
@@ -101,13 +101,13 @@ namespace Celeste.Mod.CelesteBot_2023.Main
             if (firstFrame)
             {
                 CelesteBotMain.Log("First action", LogLevel.Info);
-                LastDistanceFromTarget = TargetFinder.CurrentDistanceFromTarget(player.CelesteGamePlayer);
-                LastVectorDistanceFromTarget = TargetFinder.CurrentVectorDistanceFromTarget(player.CelesteGamePlayer);
+                LastDistanceFromTarget = TargetFinder.CurrentDistanceFromTarget(runner.CelesteGamePlayer);
+                LastVectorDistanceFromTarget = TargetFinder.CurrentVectorDistanceFromTarget(runner.CelesteGamePlayer);
                 firstFrame = false;
                 return 0;
             }
             //double distanceFromTarget = TargetFinder.CurrentDistanceFromTarget(player.player);
-            Vector2 currentVectorDistanceFromTarget = TargetFinder.CurrentVectorDistanceFromTarget(player.CelesteGamePlayer);
+            Vector2 currentVectorDistanceFromTarget = TargetFinder.CurrentVectorDistanceFromTarget(runner.CelesteGamePlayer);
             double distanceFromTarget = currentVectorDistanceFromTarget.Length();
             double changeInDistance = LastDistanceFromTarget - distanceFromTarget;
             Vector2 changeInVectorDistance = LastVectorDistanceFromTarget - currentVectorDistanceFromTarget;
@@ -146,7 +146,7 @@ namespace Celeste.Mod.CelesteBot_2023.Main
             //    rewardMultipler *= 1.5;
             //}
 
-            if (player.CelesteGamePlayer.Dead)
+            if (runner.CelesteGamePlayer.Dead)
             {
                 // reward is correlated to percentage of the level completed
                 //changeInVectorDistance = OriginalVectorDistanceFromTarget - currentVectorDistanceFromTarget * 3.5;
@@ -165,27 +165,28 @@ namespace Celeste.Mod.CelesteBot_2023.Main
 
             Func<bool, bool> setLevelFinished = (bool finished) =>
             {
-                player.PlayerFinishedLevel = finished;
-                player.NeedImmediateGameStateUpdate = true;
+                runner.PlayerFinishedLevel = true;
+                runner.EpisodeEnded = true;
                 LastLevelName = CurrentLevelName;
                 return true;
             };
 
-            if (FinishedLevel)
+            if (FinishedLevel )
             {
                 // new level reached!
-                reward += 150 * FramesBetweenCalculations; // denormalized flat reward for beating level
+                reward += 450 * FramesBetweenCalculations; // denormalized flat reward for beating level
                 setLevelFinished(true);
-            } else if (!TargetFinder.MovingForwardBacktrackedLevels && (CurrentLevelName != LastLevelName && CurrentLevelName != TargetFinder.CelesteSession.FurthestSeenLevel))
+            } 
+            else if (!TargetFinder.MovingForwardBacktrackedLevels && (CurrentLevelName != LastLevelName && CurrentLevelName != TargetFinder.CelesteSession.FurthestSeenLevel))
             {
                 CelesteBotMain.Log("Backtracking, punishing", LogLevel.Info);
-                reward -= 75 * FramesBetweenCalculations; // denormalized flat punishment for backtracking levels
-                setLevelFinished(false);
+                reward -= 200 * FramesBetweenCalculations; // denormalized flat punishment for backtracking levels
+                setLevelFinished(true);
             } else if (CurrentLevelName != LastLevelName && TargetFinder.MovingForwardBacktrackedLevels)
             {
-                CelesteBotMain.Log("Unbacktracking, rewarding", LogLevel.Info);
+                CelesteBotMain.Log("Unbacktracking, rewarding", LogLevel.Info); 
 
-                reward += 50 * FramesBetweenCalculations; // denormalized flat reward for un-backtracking
+                reward += 150 * FramesBetweenCalculations; // denormalized flat reward for un-backtracking
                 setLevelFinished(true);
             }
             // Punish if backtracking to level it shouldnt be on.
@@ -209,9 +210,9 @@ namespace Celeste.Mod.CelesteBot_2023.Main
             {
                 CelesteBotMain.Log("Killing player because it timed out");
                 reward = -75 * FramesBetweenCalculations;
-                player.KillPlayer();
-                player.PlayerDied = true;
-                player.NeedImmediateGameStateUpdate = true;
+                runner.KillPlayer();
+                runner.PlayerDied = true;
+                runner.EpisodeEnded = true;
             }
             else
             {
@@ -250,8 +251,8 @@ namespace Celeste.Mod.CelesteBot_2023.Main
 
         internal void NewEpisodeSetOriginalDistance()
         {
-            OriginalDistanceFromTarget = TargetFinder.CurrentDistanceFromTarget(player.CelesteGamePlayer);
-            OriginalVectorDistanceFromTarget = TargetFinder.CurrentVectorDistanceFromTarget(player.CelesteGamePlayer);
+            OriginalDistanceFromTarget = TargetFinder.CurrentDistanceFromTarget(runner.CelesteGamePlayer);
+            OriginalVectorDistanceFromTarget = TargetFinder.CurrentVectorDistanceFromTarget(runner.CelesteGamePlayer);
 
             CelesteBotMain.Log("Resetting episode, new OriginalDistanceFromTarget: " + OriginalDistanceFromTarget.ToString("F2"));
             ClosestDistanceFromTargetReached = OriginalDistanceFromTarget;

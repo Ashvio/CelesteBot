@@ -47,9 +47,11 @@ namespace CelesteBot_2023
         public CameraManager cameraManager;
         public TrainingEpisodeState Episode;
 
-        public bool NeedImmediateGameStateUpdate;
+        public bool EpisodeEnded;
         public bool PlayerDied;
 
+        public int EpisodeNumber;
+        public int EpisodeEndedNumber;
         private bool GameInitiated;
 
         private int TalkCount = 0; // Counts how many times we attempted to talk to something
@@ -68,45 +70,53 @@ namespace CelesteBot_2023
             GameInitiated = false;
             Input = new InputPlayer(Celeste.Celeste.Instance, new InputData()); // Blank InputData when constructing. Overwrite it when needing to update inputs
             Celeste.Celeste.Instance.Components.Add(Input);
+            EpisodeNumber = 0;
+            EpisodeEndedNumber = 0;
         }
 
         public void TryUpdateGameState(InputData nextInput)
         {
             bool actionRunThisFrame = false;
+
             if ((CelesteGamePlayer.Dead && !WaitingForRespawn))
             {
-                NeedImmediateGameStateUpdate = true;
+                EpisodeEnded = true;
                 WaitingForRespawn = true;
-                PlayerDied = CelesteGamePlayer.Dead;
+                PlayerDied = true;
                 DeathCounter += 1;
-                if (DeathCounter >= DEATHS_TO_RESTART_RANDOMIZER)
-                {
-                    RestartGame();
-                    DeathCounter = 0;
-                }
+                
+                return;
             }
             else if (WaitingForRespawn && CelesteGamePlayer.Dead)
             {
                 // clear movement buffer
                 nextInput = new InputData();
                 Input.UpdateData(nextInput);
-                actionRunThisFrame = true;
+                return;
             }
             else if (WaitingForRespawn && !CelesteGamePlayer.Dead)
             {
                 WaitingForRespawn = false;
             }
-            // Handle RL state machine below
             Episode.IncrementFrames();
-            if (!Episode.FirstObservationSent)
-            {
+            //if (DeathCounter >= DEATHS_TO_RESTART_RANDOMIZER)
+            //{
+            //    RestartGame();
+            //    DeathCounter = 0;
+            //}
+            // Handle RL state machine below
+            // First observation
+            if (!Episode.FirstObservationSent)            {
+                EpisodeNumber += 1;
+                CelesteBotMain.Log("Episode " + EpisodeNumber + " started.");
                 Episode.NewEpisodeSetOriginalDistance();
                 TargetFinder.UpdateCurrentTarget();
-                ProcessGameState(false, false);
-                bool observationSent = true;
-                Episode.FirstObservationSent = observationSent;
+                GameState gameState = ProcessGameState(false, false);
+                GameStateManager.AddObservation(gameState);
 
-                RunActionInNFrames = GetActionFrameDelay(observationSent);
+                Episode.FirstObservationSent = true;
+
+                RunActionInNFrames = GetActionFrameDelay(true);
             }
             else if (RunActionInNFrames != -1)
             {
@@ -127,29 +137,35 @@ namespace CelesteBot_2023
                     RunActionInNFrames -= 1;
                 }
             }
-
-            else if (NeedImmediateGameStateUpdate || (NeedGameStateUpdate && Episode.IsCalculateFrame()) || (!CelesteBotMain.Settings.TrainingEnabled && Episode.IsCalculateFrame()))
+            // 163/68 = 23
+            //  32/15 = 5
+            // Retrieve and send most recent reward
+            if (/*NeedImmediateGameStateUpdate ||*/ (NeedGameStateUpdate && Episode.IsCalculateFrame()) || (!CelesteBotMain.Settings.TrainingEnabled && Episode.IsCalculateFrame()))
             {
+
+
                 // get reward and observation
                 TargetFinder.UpdateCurrentTarget();
-                ProcessGameState(PlayerDied, PlayerFinishedLevel);
-
-                double reward = Episode.GetReward();
+                double reward = Episode.GetReward(); 
+                GameState gameState = ProcessGameState(PlayerDied, PlayerFinishedLevel);
+                GameStateManager.AddObservation(gameState);
 
                 GameStateManager.AddReward(reward);
-                if (!NeedImmediateGameStateUpdate)
+                if (PlayerDied || PlayerFinishedLevel)
                 {
-                    RunActionInNFrames = GetActionFrameDelay(true);
-                }
-                else
-                {
+                    EpisodeEndedNumber += 1;
+                    CelesteBotMain.Log("Episode " + EpisodeEndedNumber + " ended.");
                     // if player is dead or level finished, first need to reset the episode
                     Episode.ResetEpisode();
                     PlayerDied = false;
                     PlayerFinishedLevel = false;
                 }
+                else
+                {
+                    RunActionInNFrames = GetActionFrameDelay(true);
+                }
                 NeedGameStateUpdate = false;
-                NeedImmediateGameStateUpdate = false;
+                EpisodeEnded = false;
 
             }
             if (!actionRunThisFrame)
@@ -160,30 +176,11 @@ namespace CelesteBot_2023
                 Input.UpdateData(nextInput, true);
             }
         }
-        public bool ProcessGameState(bool PlayerDied, bool PlayerFinishedLevel)
+        public GameState ProcessGameState(bool PlayerDied, bool PlayerFinishedLevel)
         {
-            if (WaitingForRespawn)
-            {
-
-                if (!CelesteGamePlayer.Dead)
-                {
-                    // waiting for respawn
-                    WaitingForRespawn = false;
-                }
-                else
-                {
-                }
-            }
-            // player just died, so set it to dead and record observation
-            else if (CelesteGamePlayer.Dead)
-            {
-                WaitingForRespawn = true;
-            }
             cameraManager.UpdateScreenVision(Episode.Target);
             GameState gameState = new(cameraManager, CelesteGamePlayer, Episode, PlayerDied, PlayerFinishedLevel);
-            GameStateManager.AddObservation(gameState);
-            return true;
-            
+            return gameState;
         }
         public void SetupVision()
         {
@@ -202,7 +199,9 @@ namespace CelesteBot_2023
         {
             if (!GameInitiated && IsWorker)
             {
-                CurrentActionSequence = ActionSequence.GenerateActionSequence("Wait,Wait,Wait,Wait,Wait,Wait,MenuConfirm,Wait,Wait,MenuDown,Wait,Wait,MenuConfirm,Wait,MenuConfirm,Wait,Wait,MenuConfirm");
+                CurrentActionSequence = ActionSequence.GenerateActionSequence("Wait,Wait,Wait,Wait,Wait,Wait,MenuConfirm,Wait,Wait,MenuConfirm,Wait,MenuConfirm,Wait,Wait,MenuConfirm");
+
+                // CurrentActionSequence = ActionSequence.GenerateActionSequence("Wait,Wait,Wait,Wait,Wait,Wait,MenuConfirm,Wait,Wait,MenuDown,Wait,Wait,MenuConfirm,Wait,MenuConfirm,Wait,Wait,MenuConfirm");
                 GameInitiated = true;
             }
             Level level = TileFinder.GetCelesteLevel();
@@ -215,7 +214,6 @@ namespace CelesteBot_2023
             else if (level == null && CelesteGamePlayer == null && !WaitingForRespawn && GameInitiated)
             {
                 CurrentActionSequence = ActionSequence.GenerateActionSequence("Wait,MenuConfirm");
-
             }
             if (level == null || level.Transitioning || CelesteGamePlayer == null || WaitingForRespawn)
             {
@@ -227,18 +225,11 @@ namespace CelesteBot_2023
                         WaitingForRespawn = false;
                     }
                 }
-                if (NeedToRestartGame)
-                {
-                    
-                    // spam "A" if not in a level
-                    //StartRandomizerGame();d
-                }
                 BotState = State.Disabled;
                 return true;
             }
  
 
-            NeedToRestartGame = false;
             BotState = State.Running;
             if (CelesteBotMain.Settings.TrainingEnabled)
             {
@@ -265,7 +256,6 @@ namespace CelesteBot_2023
         {
             string sequence = "Wait,Wait,Pause,MenuDown,MenuDown,MenuDown,MenuDown,MenuDown,MenuConfirm,Wait,MenuConfirm,Wait,Wait,MenuConfirm,Wait,MenuConfirm";
             CurrentActionSequence = ActionSequence.GenerateActionSequence(sequence);
-            NeedToRestartGame = true;
             TargetFinder.ResetCache();
             Episode.FinishedLevelCount = 0;
             WaitingForRespawn = false;

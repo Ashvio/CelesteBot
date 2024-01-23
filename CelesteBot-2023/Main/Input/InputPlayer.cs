@@ -25,8 +25,9 @@ namespace CelesteBot_2023
 
             if (waitingForNextAction)
             {
-                // only update jump value
+                // preserve jump/grab value
                 Data.Jump = newData.Jump;
+                Data.Grab = newData.Grab;
             }
             else
             {

@@ -21,11 +21,11 @@ class TerminationEvent(Enum):
 
 class CelesteEnv(gym.Env):
     VISION_SIZE = 40
-    ENTITY_MAX_COUNT = 255
+    ENTITY_MAX_COUNT = 512
     MIN_SPEED = -1000
     MAX_SPEED = 1000
-    MIN_POSITION = -50000
-    MAX_POSITION = 50000
+    MIN_POSITION = -500
+    MAX_POSITION = 500
     NOOP_ACTION = np.array([0, 0, 0, 0, 3])
 
     def __init__(self, action_queue=None, off_policy=False, logger=None):
@@ -69,12 +69,12 @@ class CelesteEnv(gym.Env):
             "can_dash": spaces.MultiBinary(1),
             "is_climbing": spaces.MultiBinary(1),
             "map_entities_vision": spaces.Box(0, self.ENTITY_MAX_COUNT, shape=shape,
-                                              dtype=np.uint8),
+                                              dtype=np.int16),
             "on_ground": spaces.MultiBinary(1),
-            "position": spaces.Box(self.MIN_POSITION, self.MAX_POSITION, shape=(2,), dtype=np.float32),
+            "position": spaces.Box(self.MIN_POSITION, self.MAX_POSITION, shape=(2,), dtype=np.int32),
             "speed_x_y": spaces.Box(self.MIN_SPEED, self.MAX_SPEED, shape=(2,), dtype=np.float16),
             "stamina": spaces.Box(-10, 10, shape=(1,), ),
-            "target": spaces.Box(self.MIN_POSITION, self.MAX_POSITION, shape=(2,), dtype=np.float32),
+            "target": spaces.Box(self.MIN_POSITION, self.MAX_POSITION, shape=(2,), dtype=np.int32),
         })
         self.observation_queue = queue.Queue()  # type: queue.Queue[OrderedDict]
         self.reward_queue = queue.Queue()  # type: queue.Queue[float]
@@ -86,10 +86,10 @@ class CelesteEnv(gym.Env):
 
     def get_reward(self):
         try:
-            reward = self.reward_queue.get(timeout=0.5)
+            reward = self.reward_queue.get(timeout=15)
         except queue.Empty:
-            self.logger.log(logging.INFO, "Timed out waiting for reward")
-            self.logger.log(logging.INFO, "queue size: " + str(self.reward_queue.qsize()))
+            self.logger.log(logging.WARN, "Timed out waiting for reward")
+            self.logger.log(logging.WARN, "queue size: " + str(self.reward_queue.qsize()))
             reward = 0.0
         # self.logger.log(logging.INFO, "Reward: " + str(reward))
         # info = self.info_queue.get()
@@ -100,11 +100,11 @@ class CelesteEnv(gym.Env):
     def step(self, action: ActType) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
         # Doesnt return reward yet
         self.add_action(action)
-        observation = self.observation_queue.get()
+        observation = self.observation_queue.get(timeout=5)
+        termination_event = self.termination_event_queue.get()
 
         # reward = self.reward_queue.get()
         reward = self.get_reward()
-        termination_event = self.termination_event_queue.get()
         termination = termination_event == TerminationEvent.DEATH or termination_event == TerminationEvent.FINISHED_LEVEL
         return observation, reward, termination, False, {"Died": termination_event == TerminationEvent.DEATH,
                                                     "Finished Level": termination_event == TerminationEvent.FINISHED_LEVEL}
@@ -112,7 +112,8 @@ class CelesteEnv(gym.Env):
     def reset(self, *, seed: int | None = None, options: dict[str, Any] | None = None) -> tuple[
         ObsType, dict[str, Any]]:
         super().reset(seed=seed)
-        return self.observation_queue.get(), {}
+        termination_event = self.termination_event_queue.get()
+        return self.observation_queue.get(timeout=90), {}
 
 
 if __name__ == "__main__":

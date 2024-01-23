@@ -294,7 +294,7 @@ if __name__ == "__main__":
                 "use_lstm": False,
                 "use_attention": True,
                 "dim": CelesteEnv.VISION_SIZE,
-                "conv_filters": [[16, [3, 3], 2], [32, [3, 3], 2], [64, [3, 3], 1]],
+                "conv_filters": [[16, [2, 2], 2], [32, [2, 2], 2], [64, [3, 3], 1]],
                 "attention_dim": 256,
                 "attention_head_dim": 128,
                 "attention_num_transformer_units": 6,
@@ -319,7 +319,7 @@ if __name__ == "__main__":
             # "clip_param": sample_from(lambda spec: random.uniform(*hyper_parameter_ranges["clip_param"])),
             "clip_param": 0.15,
             # "lr": sample_from(lambda spec: tune.loguniform(*hyper_parameter_ranges["lr"])),
-            "train_batch_size": 512,
+            "train_batch_size": 256,
             # "train_batch_size": sample_from(lambda spec: tune.randint(*hyper_parameter_ranges["train_batch_size"])),
             "lr_schedule": [[0, 1e-3], [100000, 1e-4], [10000000, 1e-5]],
             # "normalize_actions": False
